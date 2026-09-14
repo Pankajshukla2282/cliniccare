@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClinicCare — 9 · RBAC — Role Hierarchy</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:"default",
+  themeVariables:{fontFamily:"system-ui,-apple-system,\"Segoe UI\",Roboto,sans-serif"}});</script>
+<style>*{box-sizing:border-box}
+:root{--bg:#f6f8fa;--fg:#1f2328;--card:#fff;--border:#d0d7de;--muted:#57606a;--accent:#0969da}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+     background:var(--bg);color:var(--fg);line-height:1.55}
+header{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--border);
+       padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:650;flex:1 1 auto}
+nav{display:flex;gap:8px;flex-wrap:wrap}
+nav a{color:var(--accent);text-decoration:none;font-size:13px;white-space:nowrap}
+nav a:hover{text-decoration:underline}
+main{max-width:1180px;margin:0 auto;padding:20px;overflow-x:auto}
+.desc{color:var(--muted);font-size:14px;margin:0 0 14px}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;
+       overflow-x:auto}
+.toolbar{margin:0 0 10px}
+button{font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
+       background:var(--card);color:var(--accent);cursor:pointer}
+button:hover{border-color:var(--accent)}
+footer{color:var(--muted);font-size:11px;text-align:center;padding:20px}</style>
+</head>
+<body>
+<header>
+<h1>ClinicCare — 9 · RBAC — Role Hierarchy</h1>
+<nav>
+<a href="index.html">&#8592; All diagrams</a>
+<a href="../architecture-diagrams.md">.md source</a>
+<a href="../architecture-diagrams.drawio">.drawio</a>
+</nav>
+</header>
+<main>
+<p class="desc">SUPER_ADMIN (global, all scopes) → CLINIC_ADMIN/CADMIN → org-scoped roles (DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, ACCOUNTANT, CONTENT_MANAGER, PATIENT); RBAC scope enforced as RbacScope.org — cross-tenant access is a 404.</p>
+<div class="toolbar"><button onclick="copySrc(this)">Copy mermaid source</button></div>
+<div class="panel"><pre class="mermaid">
+flowchart TD
+  SA["SUPER_ADMIN<br/>global, all scopes"]
+  CA["CLINIC_ADMIN<br/>org-wide"]
+  AD["ADMIN"]
+  DR["DOCTOR"]
+  NUR["NURSE"]
+  RC["RECEPTIONIST"]
+  PH["PHARMACIST"]
+  AC["ACCOUNTANT"]
+  CM["CONTENT_MANAGER"]
+  PT["PATIENT"]
+
+  SA --> CA
+  CA --> AD
+  AD --> DR
+  AD --> NUR
+  AD --> RC
+  AD --> PH
+  AD --> AC
+  AD --> CM
+  AD --> PT
+
+  DR -.->|"medical_record.write, prescription.*"|PT
+  PH -.->|"inventory.*, orders"|PT
+  RC -.->|"appointment.*, patient.read"|PT
+  AC -.->|"billing.*, report.view"|PT
+  CM -.->|"cms.*"|PT
+</pre></div>
+</main>
+<footer>ClinicCare — generated from the implemented codebase  · docs/diagrams/</footer>
+<script>
+function copySrc(btn){
+  var pre = document.querySelector(".panel .mermaid");
+  var txt = pre.textContent;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function(){btn.textContent="Copied!";});
+  } else {
+    window.prompt("Copy mermaid source:", txt);
+  }
+}
+</script>
+</body>
+</html>

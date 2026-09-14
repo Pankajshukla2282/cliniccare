@@ -1,0 +1,1338 @@
+// ClinicCare Platform - Prisma Schema (Step 2, fixed)
+// Kubernetes-native deployment (no Docker Compose).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  CLINIC_ADMIN
+  DOCTOR
+  RECEPTIONIST
+  NURSE
+  PHARMACIST
+  ACCOUNTANT
+  CONTENT_MANAGER
+  PATIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum DoctorStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum ConsultationType {
+  IN_PERSON
+  ONLINE
+  CHAT
+  AUDIO
+}
+
+enum TreatmentType {
+  EECP
+  SKIN_CARE
+  CONSULTATION
+  THERAPY
+}
+
+enum PaymentStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  UPI
+  NET_BANKING
+  WALLET
+}
+
+enum OrderStatus {
+  CREATED
+  PAYMENT_PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  RETURN_INITIATED
+  REFUNDED
+  CANCELLED
+}
+
+enum OrderType {
+  CONSULTATION
+  TREATMENT_PACKAGE
+  PRODUCT
+  SUBSCRIPTION
+}
+
+enum DocumentType {
+  PRESCRIPTION
+  MEDICAL_REPORT
+  CONSENT_FORM
+  BEFORE_AFTER_IMAGE
+  LAB_REPORT
+  ID_PROOF
+  OTHER
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+}
+
+// ---------------------------------------------------------------------------
+// Platform: Organization, Clinic, Users, RBAC
+// ---------------------------------------------------------------------------
+
+model Organization {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  slug      String?  @unique
+  legalName String?
+  email     String?  @unique
+  phone     String?
+  website   String?
+  // SaaS lifecycle
+  plan                String    @default("FREE")
+  status              String    @default("ACTIVE") // PENDING | TRIAL | ACTIVE | SUSPENDED | CANCELLED
+  trialEndsAt         DateTime?
+  subRenewsAt         DateTime?
+  onboardingCompleted Boolean   @default(false)
+  onboardedAt         DateTime?
+  // Plan limits (null = unlimited)
+  maxClinics  Int?
+  maxDoctors  Int?
+  maxPatients Int?
+  settings    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  clinics               Clinic[]
+  users                 User[]
+  patients              Patient[]
+  serviceCategories     ServiceCategory[]
+  services              Service[]
+  productCategories     ProductCategory[]
+  products              Product[]
+  packages              Package[]
+  coupons               Coupon[]
+  leads                 Lead[]
+  prescriptionTemplates PrescriptionTemplate[]
+  cmsPages              CmsPage[]
+  notificationTemplates NotificationTemplate[]
+  rolePermissions       RolePermission[]
+
+  @@map("organizations")
+}
+
+model Clinic {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  name           String
+  address        String?
+  city           String?
+  state          String?
+  country        String?  @default("India")
+  pincode        String?
+  phone          String?
+  email          String?
+  timezone       String   @default("Asia/Kolkata")
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  users        User[]
+  doctors      Doctor[]
+  schedules    DoctorSchedule[]
+  holidays     ClinicHoliday[]
+  rooms        Room[]
+  appointments Appointment[]
+  consultations Consultation[]
+  treatmentPlans TreatmentPlan[]
+
+  @@index([organizationId])
+  @@map("clinics")
+}
+
+model User {
+  id             Int        @id @default(autoincrement())
+  organizationId Int
+  clinicId       Int?
+  email          String     @unique
+  phone          String?
+  passwordHash   String
+  firstName      String
+  lastName       String
+  primaryRole    Role       @default(PATIENT)
+  status         UserStatus @default(ACTIVE)
+  lastLoginAt    DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clinic        Clinic?        @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  patient       Patient?
+  doctor        Doctor?
+  roles         UserRole[]
+  refreshTokens RefreshToken[]
+  notifications Notification[]
+  auditLogs     AuditLog[]
+
+  @@index([organizationId])
+  @@index([clinicId])
+  @@map("users")
+}
+
+model UserRole {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  role      Role
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  id             Int      @id @default(autoincrement())
+  organizationId Int?
+  role           Role
+  permission     String
+  createdAt      DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, role, permission])
+  @@map("role_permissions")
+}
+
+// ---------------------------------------------------------------------------
+// Doctors, Specialties, Services, Scheduling
+// ---------------------------------------------------------------------------
+
+model Specialty {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  category    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  doctorLinks DoctorSpecialty[]
+
+  @@map("specialties")
+}
+
+model Doctor {
+  id                 Int          @id @default(autoincrement())
+  userId             Int?         @unique
+  clinicId           Int?
+  registrationNumber String?
+  qualification      String?
+  biography          String?
+  photoUrl           String?
+  languages          String[]     @default([])
+  certifications     String?
+  consultationTypes  String[]     @default([])
+  onlineAvailable    Boolean      @default(false)
+  slotBufferMinutes  Int          @default(0)
+  consultationFee    Decimal      @default(0) @db.Decimal(10, 2)
+  experienceYears    Int?
+  status             DoctorStatus @default(ACTIVE)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  user          User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  clinic        Clinic?           @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  specialties   DoctorSpecialty[]
+  services      DoctorService[]
+  schedules     DoctorSchedule[]
+  leaves        DoctorLeave[]
+  appointments  Appointment[]
+  consultations Consultation[]
+  prescriptions Prescription[]
+  prescriptionTemplates PrescriptionTemplate[]
+  medicalRecords MedicalRecord[]
+  followUps     FollowUp[]
+  reviews       Review[]
+  treatmentPlans TreatmentPlan[]
+  invoices      Invoice[]
+  recommendations DoctorRecommendation[]
+
+  @@index([clinicId])
+  @@map("doctors")
+}
+
+model DoctorSpecialty {
+  id          Int      @id @default(autoincrement())
+  doctorId    Int
+  specialtyId Int
+  createdAt   DateTime @default(now())
+
+  doctor    Doctor    @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  specialty Specialty @relation(fields: [specialtyId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, specialtyId])
+  @@map("doctor_specialties")
+}
+
+model ServiceCategory {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  name           String
+  description    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  services     Service[]
+
+  @@unique([organizationId, name])
+  @@map("service_categories")
+}
+
+model Service {
+  id               Int      @id @default(autoincrement())
+  organizationId   Int
+  categoryId       Int?
+  name             String
+  description      String?
+  durationMinutes  Int      @default(30)
+  price            Decimal  @default(0) @db.Decimal(10, 2)
+  sessionCount     Int?
+  isPackageable    Boolean  @default(false)
+  faqs             Json?
+  contraindications String?
+  preparation      String?
+  aftercare        String?
+  onlineAvailable  Boolean  @default(false)
+  clinicAvailable  Boolean  @default(true)
+  status           String   @default("ACTIVE")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category     ServiceCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  doctorLinks  DoctorService[]
+  appointments Appointment[]
+  reviews      Review[]
+
+  @@unique([organizationId, name])
+  @@index([categoryId])
+  @@map("services")
+}
+
+model DoctorService {
+  id          Int      @id @default(autoincrement())
+  doctorId    Int
+  serviceId   Int
+  feeOverride Decimal? @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+
+  doctor  Doctor  @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, serviceId])
+  @@map("doctor_services")
+}
+
+model DoctorSchedule {
+  id           Int      @id @default(autoincrement())
+  doctorId     Int
+  clinicId     Int?
+  dayOfWeek    Int
+  startTime    String
+  endTime      String
+  breakStart   String?
+  breakEnd     String?
+  isWorkingDay Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic Clinic? @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+
+  @@index([doctorId, dayOfWeek])
+  @@map("doctor_schedules")
+}
+
+model DoctorLeave {
+  id        Int      @id @default(autoincrement())
+  doctorId  Int
+  date      DateTime @db.Date
+  reason    String?
+  createdAt DateTime @default(now())
+
+  doctor Doctor @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+
+  @@unique([doctorId, date])
+  @@map("doctor_leaves")
+}
+
+model ClinicHoliday {
+  id        Int      @id @default(autoincrement())
+  clinicId  Int
+  date      DateTime @db.Date
+  reason    String?
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, date])
+  @@map("clinic_holidays")
+}
+
+model Appointment {
+  id              Int               @id @default(autoincrement())
+  patientId       Int
+  doctorId        Int
+  clinicId        Int?
+  serviceId       Int?
+  appointmentDate DateTime          @db.Date
+  startTime       String
+  endTime         String
+  status          AppointmentStatus @default(PENDING)
+  type            ConsultationType  @default(IN_PERSON)
+  notes           String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  patient     Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      Doctor              @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic      Clinic?             @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  service     Service?            @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  consultations Consultation[]
+  payments    Payment[]
+  statusHistory AppointmentStatusHistory[]
+
+  @@index([doctorId, appointmentDate])
+  @@index([patientId, appointmentDate])
+  @@map("appointments")
+}
+
+model AppointmentStatusHistory {
+  id         Int               @id @default(autoincrement())
+  appointmentId Int
+  fromStatus AppointmentStatus?
+  toStatus   AppointmentStatus
+  changedBy  Int?
+  note       String?
+  changedAt  DateTime          @default(now())
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId])
+  @@map("appointment_status_history")
+}
+
+// ---------------------------------------------------------------------------
+// Clinical: Patients, Consultations, Prescriptions, Documents, Consents
+// ---------------------------------------------------------------------------
+
+model Patient {
+  id               Int       @id @default(autoincrement())
+  userId           Int?      @unique
+  organizationId   Int
+  patientNumber    String    @unique
+  dateOfBirth      DateTime? @db.Date
+  gender           String?
+  bloodGroup       String?
+  address          String?
+  emergencyContact String?
+  emergencyPhone   String?
+  status           String    @default("ACTIVE")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  user              User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization      Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointments      Appointment[]
+  consultations     Consultation[]
+  prescriptions     Prescription[]
+  medicalRecords    MedicalRecord[]
+  followUps         FollowUp[]
+  reviews           Review[]
+  treatmentPlans    TreatmentPlan[]
+  documents         Document[]
+  consents          Consent[]
+  orders            Order[]
+  payments          Payment[]
+  invoices          Invoice[]
+  skinAssessments   SkinAssessment[]
+  beforeAfterImages BeforeAfterImage[]
+  packagePurchases  PackagePurchase[]
+  recommendations   DoctorRecommendation[]
+  cart              Cart?
+
+  @@index([organizationId])
+  @@map("patients")
+}
+
+model Consultation {
+  id               Int              @id @default(autoincrement())
+  patientId        Int
+  doctorId         Int
+  clinicId         Int?
+  appointmentId    Int?
+  consultationType ConsultationType @default(IN_PERSON)
+  status           String           @default("ACTIVE")
+  chiefComplaint   String?
+  symptoms         String?
+  history          String?
+  bloodPressure    String?
+  heartRate        Int?
+  temperature      Decimal?         @db.Decimal(4, 1)
+  weight           Decimal?         @db.Decimal(5, 2)
+  height           Decimal?         @db.Decimal(5, 2)
+  assessment       String?
+  diagnosis        String?
+  examination      String?
+  investigations   String?
+  advice           String?
+  treatmentPlanText String?
+  followUpDate     DateTime?        @db.Date
+  durationMinutes  Int?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic       Clinic?       @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  appointment  Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  prescriptions Prescription[]
+  documents    Document[]
+  skinAssessments SkinAssessment[]
+  beforeAfterImages BeforeAfterImage[]
+  followUps    FollowUp[]
+  teleconsultation Teleconsultation?
+  recommendations DoctorRecommendation[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@map("consultations")
+}
+
+model Prescription {
+  id             Int       @id @default(autoincrement())
+  patientId      Int
+  doctorId       Int
+  consultationId Int?
+  status         String    @default("ACTIVE")
+  title          String?
+  instructions   String?
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  items        PrescriptionItem[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@map("prescriptions")
+}
+
+model PrescriptionItem {
+  id             Int      @id @default(autoincrement())
+  prescriptionId Int
+  productId      Int?
+  name           String
+  dosage         String?
+  frequency      String?
+  duration       String?
+  instructions   String?
+  quantity       Int      @default(1)
+  price          Decimal? @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+model Document {
+  id                Int          @id @default(autoincrement())
+  patientId         Int?
+  consultationId    Int?
+  ownerType         String
+  ownerId           Int
+  title             String
+  type              DocumentType
+  storagePath       String
+  fileName          String
+  mimeType          String
+  size              Int?
+  uploadedBy        Int?
+  version           Int          @default(1)
+  consentRequired   Boolean      @default(true)
+  consentGiven      Boolean      @default(false)
+  consentGivenAt    DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  patient      Patient?      @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  consent      Consent?
+
+  @@index([patientId])
+  @@map("documents")
+}
+
+model Consent {
+  id         Int      @id @default(autoincrement())
+  patientId  Int
+  documentId Int?     @unique
+  type       String
+  given      Boolean  @default(false)
+  givenAt    DateTime?
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  patient  Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@map("consents")
+}
+
+// ---------------------------------------------------------------------------
+// Treatments: EECP, Skin Care, Packages
+// ---------------------------------------------------------------------------
+
+model TreatmentPlan {
+  id                Int           @id @default(autoincrement())
+  patientId         Int
+  doctorId          Int
+  clinicId          Int?
+  title             String
+  type              TreatmentType @default(CONSULTATION)
+  status            String        @default("ACTIVE")
+  totalSessions     Int?
+  completedSessions Int           @default(0)
+  startDate         DateTime?     @db.Date
+  targetCompletion  DateTime?     @db.Date
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  patient    Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor     Doctor             @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  clinic     Clinic?            @relation(fields: [clinicId], references: [id], onDelete: SetNull)
+  sessions   TreatmentSession[]
+  payments   Payment[]
+  skinAssessments SkinAssessment[]
+  beforeAfterImages BeforeAfterImage[]
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@map("treatment_plans")
+}
+
+model TreatmentSession {
+  id            Int      @id @default(autoincrement())
+  treatmentPlanId Int
+  sessionNumber Int
+  date          DateTime @db.Date
+  startTime     String?
+  endTime       String?
+  status        String   @default("SCHEDULED")
+  parameters    Json?
+  observations  String?
+  notes         String?
+  createdAt     DateTime @default(now())
+
+  treatmentPlan TreatmentPlan @relation(fields: [treatmentPlanId], references: [id], onDelete: Cascade)
+
+  @@unique([treatmentPlanId, sessionNumber])
+  @@map("treatment_sessions")
+}
+
+model Package {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  name           String
+  description    String?
+  type           String
+  price          Decimal  @db.Decimal(10, 2)
+  totalSessions  Int?
+  currency       String   @default("INR")
+  duration       String?
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  purchases    PackagePurchase[]
+  orderItems   OrderItem[]
+  cartItems    CartItem[]
+
+  @@unique([organizationId, name])
+  @@map("packages")
+}
+
+model PackagePurchase {
+  id                Int      @id @default(autoincrement())
+  patientId         Int
+  packageId         Int
+  purchaseDate      DateTime @default(now())
+  status            String   @default("ACTIVE")
+  sessionsUsed      Int      @default(0)
+  sessionsRemaining Int
+  createdAt         DateTime @default(now())
+
+  patient      Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  package      Package               @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  entitlements PackageEntitlement[]
+
+  @@index([patientId])
+  @@map("package_purchases")
+}
+
+model PackageEntitlement {
+  id          Int       @id @default(autoincrement())
+  purchaseId  Int
+  sessionNumber Int
+  status      String    @default("ACTIVE")
+  claimedAt   DateTime?
+  usedAt      DateTime?
+
+  purchase PackagePurchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  @@unique([purchaseId, sessionNumber])
+  @@map("package_entitlements")
+}
+
+model SkinAssessment {
+  id              Int       @id @default(autoincrement())
+  patientId       Int
+  consultationId  Int?
+  treatmentPlanId Int?
+  skinType        String?
+  concerns        String[]  @default([])
+  severity        String?
+  assessmentDate  DateTime  @db.Date
+  recommendations String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultation  Consultation?  @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  treatmentPlan TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@map("skin_assessments")
+}
+
+model BeforeAfterImage {
+  id              Int       @id @default(autoincrement())
+  patientId       Int
+  treatmentPlanId Int?
+  consultationId  Int?
+  bodyArea        String?
+  imageType       String?
+  storagePath     String
+  fileName        String
+  mimeType        String
+  capturedAt      DateTime
+  doctorNotes     String?
+  patientConsent  Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  treatmentPlan TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+  consultation  Consultation?  @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@map("before_after_images")
+}
+
+// ---------------------------------------------------------------------------
+// Commerce: Products, Orders, Payments, Invoices
+// ---------------------------------------------------------------------------
+
+model ProductCategory {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  name           String
+  description    String?
+  parentId       Int?
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  parent       ProductCategory?    @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children     ProductCategory[]   @relation("CategoryHierarchy")
+  products     Product[]
+
+  @@unique([organizationId, name])
+  @@map("product_categories")
+}
+
+model Product {
+  id                   Int      @id @default(autoincrement())
+  organizationId       Int
+  categoryId           Int
+  name                 String
+  slug                 String
+  brand                String?
+  description          String?
+  shortDescription     String?
+  price                Decimal  @db.Decimal(10, 2)
+  compareAtPrice       Decimal? @db.Decimal(10, 2)
+  discountPercentage   Decimal? @db.Decimal(5, 2)
+  sku                  String?
+  barcode              String?
+  trackInventory       Boolean  @default(true)
+  inventoryQuantity    Int      @default(0)
+  lowStockThreshold    Int      @default(10)
+  unit                 String?
+  images               String[] @default([])
+  status               String   @default("ACTIVE")
+  isFeatured           Boolean  @default(false)
+  consultationRequired Boolean  @default(false)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category        ProductCategory        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants        ProductVariant[]
+  batches         ProductBatch[]
+  inventoryTx     InventoryTransaction[]
+  orderItems      OrderItem[]
+  cartItems       CartItem[]
+  prescriptionItems PrescriptionItem[]
+  recommendations DoctorRecommendation[]
+
+  @@index([organizationId])
+  @@index([categoryId])
+  @@unique([organizationId, slug])
+  @@map("products")
+}
+
+model ProductVariant {
+  id                 Int      @id @default(autoincrement())
+  productId          Int
+  sku                String   @unique
+  price              Decimal  @db.Decimal(10, 2)
+  compareAtPrice     Decimal? @db.Decimal(10, 2)
+  discountPercentage Decimal? @db.Decimal(5, 2)
+  inventoryQuantity  Int      @default(0)
+  attributes         Json?
+  isDefault          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+  cartItems  CartItem[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+model InventoryTransaction {
+  id               Int      @id @default(autoincrement())
+  productId        Int
+  type             String
+  quantity         Int
+  previousQuantity Int
+  newQuantity      Int
+  referenceType    String?
+  referenceId      Int?
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@map("inventory_transactions")
+}
+
+model DoctorRecommendation {
+  id             Int      @id @default(autoincrement())
+  doctorId       Int
+  patientId      Int
+  productId      Int
+  consultationId Int?
+  note           String?
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now())
+
+  doctor       Doctor        @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  product      Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@map("doctor_recommendations")
+}
+
+model Order {
+  id            Int           @id @default(autoincrement())
+  patientId     Int
+  orderNumber   String        @unique
+  orderType     OrderType     @default(PRODUCT)
+  status        OrderStatus   @default(CREATED)
+  paymentStatus PaymentStatus @default(PENDING)
+  subtotal      Decimal       @db.Decimal(10, 2)
+  tax           Decimal       @default(0) @db.Decimal(10, 2)
+  discount      Decimal       @default(0) @db.Decimal(10, 2)
+  couponCode    String?
+  total         Decimal       @db.Decimal(10, 2)
+  shippingAddress String?
+  billingAddress  String?
+  notes         String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  patient  Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  items    OrderItem[]
+  payments Payment[]
+  refunds  Refund[]
+  invoices Invoice[]
+
+  @@index([patientId])
+  @@map("orders")
+}
+
+model OrderItem {
+  id               Int      @id @default(autoincrement())
+  orderId          Int
+  productId        Int?
+  productVariantId Int?
+  packageId        Int?
+  quantity         Int      @default(1)
+  price            Decimal  @db.Decimal(10, 2)
+  discount         Decimal  @default(0) @db.Decimal(10, 2)
+  total            Decimal  @db.Decimal(10, 2)
+  createdAt        DateTime @default(now())
+
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  package Package?        @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model Payment {
+  id              Int           @id @default(autoincrement())
+  orderId         Int?
+  patientId       Int
+  appointmentId   Int?
+  treatmentPlanId Int?
+  amount          Decimal       @db.Decimal(10, 2)
+  currency        String        @default("INR")
+  method          PaymentMethod @default(UPI)
+  status          PaymentStatus @default(PENDING)
+  transactionId   String?
+  gatewayResponse Json?
+  failureReason   String?
+  receiptNumber   String?       @unique
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  order         Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  patient       Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment   Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  treatmentPlan TreatmentPlan? @relation(fields: [treatmentPlanId], references: [id], onDelete: SetNull)
+  refunds       Refund[]
+
+  @@index([patientId])
+  @@index([orderId])
+  @@map("payments")
+}
+
+model Invoice {
+  id            Int      @id @default(autoincrement())
+  orderId       Int?
+  patientId     Int
+  doctorId      Int?
+  amount        Decimal  @db.Decimal(10, 2)
+  currency      String   @default("INR")
+  tax           Decimal  @default(0) @db.Decimal(10, 2)
+  total         Decimal  @db.Decimal(10, 2)
+  status        String   @default("DRAFT")
+  invoiceNumber String   @unique
+  pdfPath       String?
+  sentAt        DateTime?
+  paidAt        DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  order   Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  patient Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor?  @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@map("invoices")
+}
+
+// ---------------------------------------------------------------------------
+// CMS
+// ---------------------------------------------------------------------------
+
+model CmsPage {
+  id              Int      @id @default(autoincrement())
+  organizationId  Int
+  title           String
+  slug            String
+  type            String
+  content         Json?
+  metaTitle       String?
+  metaDescription String?
+  status          String   @default("PUBLISHED")
+  publishAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, slug])
+  @@map("cms_pages")
+}
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+model NotificationTemplate {
+  id             Int                 @id @default(autoincrement())
+  organizationId Int?
+  name           String
+  channel        NotificationChannel
+  subject        String?
+  content        String
+  variables      Json?
+  isActive       Boolean             @default(true)
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+
+  organization Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  notifications Notification[]
+
+  @@unique([organizationId, name, channel])
+  @@map("notification_templates")
+}
+
+model Notification {
+  id              Int                 @id @default(autoincrement())
+  recipientUserId Int
+  templateId      Int?
+  channel         NotificationChannel
+  status          NotificationStatus  @default(PENDING)
+  subject         String?
+  content         String
+  sentAt          DateTime?
+  deliveredAt     DateTime?
+  errorMessage    String?
+  createdAt       DateTime            @default(now())
+
+  recipient User                  @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  template  NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([recipientUserId])
+  @@map("notifications")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// EMR, Engagement, Commerce extras (Plan.txt alignment)
+// ---------------------------------------------------------------------------
+
+model MedicalRecord {
+  id         Int      @id @default(autoincrement())
+  patientId  Int
+  doctorId   Int?
+  type       String
+  title      String
+  details    Json?
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor? @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+
+  @@index([patientId])
+  @@map("medical_records")
+}
+
+model FollowUp {
+  id             Int       @id @default(autoincrement())
+  patientId      Int
+  doctorId       Int?
+  consultationId Int?
+  reason         String
+  dueDate        DateTime  @db.Date
+  status         String    @default("PENDING")
+  completedAt    DateTime?
+  notes          String?
+  createdAt      DateTime  @default(now())
+
+  patient      Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor       Doctor?       @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+
+  @@index([patientId, dueDate])
+  @@map("follow_ups")
+}
+
+model Review {
+  id          Int       @id @default(autoincrement())
+  patientId   Int
+  doctorId    Int?
+  serviceId   Int?
+  rating      Int
+  comment     String?
+  status      String    @default("PENDING")
+  moderatedBy Int?
+  moderatedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  patient Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor  Doctor?  @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([doctorId, status])
+  @@map("reviews")
+}
+
+model Refund {
+  id          Int       @id @default(autoincrement())
+  paymentId   Int
+  orderId     Int?
+  amount      Decimal   @db.Decimal(10, 2)
+  reason      String?
+  status      String    @default("PENDING")
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([paymentId])
+  @@map("refunds")
+}
+
+model Coupon {
+  id            Int       @id @default(autoincrement())
+  organizationId Int
+  code          String
+  discountType  String
+  value         Decimal   @db.Decimal(10, 2)
+  minOrderValue Decimal?  @db.Decimal(10, 2)
+  validFrom     DateTime?
+  validTill     DateTime?
+  active        Boolean   @default(true)
+  usageLimit    Int?
+  usedCount     Int       @default(0)
+  createdAt     DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, code])
+  @@map("coupons")
+}
+
+model Cart {
+  id        Int      @id @default(autoincrement())
+  patientId Int      @unique
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  patient Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  items   CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id               Int      @id @default(autoincrement())
+  cartId           Int
+  productId        Int?
+  productVariantId Int?
+  packageId        Int?
+  quantity         Int      @default(1)
+  createdAt        DateTime @default(now())
+
+  cart    Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant ProductVariant? @relation(fields: [productVariantId], references: [id], onDelete: SetNull)
+  package Package?        @relation(fields: [packageId], references: [id], onDelete: SetNull)
+
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+model ProductBatch {
+  id          Int       @id @default(autoincrement())
+  productId   Int
+  batchNumber String
+  expiryDate  DateTime? @db.Date
+  quantity    Int       @default(0)
+  notes       String?
+  createdAt   DateTime  @default(now())
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, batchNumber])
+  @@map("product_batches")
+}
+
+model Room {
+  id          Int      @id @default(autoincrement())
+  clinicId    Int
+  name        String
+  capacity    Int?
+  description String?
+  createdAt   DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, name])
+  @@map("rooms")
+}
+
+model Lead {
+  id                 Int       @id @default(autoincrement())
+  organizationId     Int
+  name               String
+  phone              String?
+  email              String?
+  source             String?
+  interest           String?
+  status             String    @default("NEW")
+  notes              String?
+  convertedPatientId Int?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("leads")
+}
+
+model Teleconsultation {
+  id             Int       @id @default(autoincrement())
+  consultationId Int       @unique
+  provider       String    @default("STUB")
+  roomId         String    @unique
+  joinUrl        String
+  status         String    @default("SCHEDULED")
+  startedAt      DateTime?
+  endedAt        DateTime?
+  createdAt      DateTime  @default(now())
+
+  consultation Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+
+  @@map("teleconsultations")
+}
+
+model PrescriptionTemplate {
+  id             Int      @id @default(autoincrement())
+  organizationId Int
+  doctorId       Int?
+  name           String
+  items          Json
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  doctor       Doctor?      @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, name])
+  @@map("prescription_templates")
+}
+
+// ---------------------------------------------------------------------------
+// Audit
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id             Int      @id @default(autoincrement())
+  organizationId Int?
+  entityType     String
+  entityId       Int
+  action         String
+  performedBy    Int?
+  performedAt    DateTime @default(now())
+  changes        Json?
+  ipAddress      String?
+  userAgent      String?
+  purpose        String?
+
+  user User? @relation(fields: [performedBy], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([entityType, entityId])
+  @@index([performedBy])
+  @@map("audit_logs")
+}

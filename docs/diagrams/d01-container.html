@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClinicCare — 1 · Container / System</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:"default",
+  themeVariables:{fontFamily:"system-ui,-apple-system,\"Segoe UI\",Roboto,sans-serif"}});</script>
+<style>*{box-sizing:border-box}
+:root{--bg:#f6f8fa;--fg:#1f2328;--card:#fff;--border:#d0d7de;--muted:#57606a;--accent:#0969da}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+     background:var(--bg);color:var(--fg);line-height:1.55}
+header{position:sticky;top:0;z-index:10;background:var(--card);border-bottom:1px solid var(--border);
+       padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:650;flex:1 1 auto}
+nav{display:flex;gap:8px;flex-wrap:wrap}
+nav a{color:var(--accent);text-decoration:none;font-size:13px;white-space:nowrap}
+nav a:hover{text-decoration:underline}
+main{max-width:1180px;margin:0 auto;padding:20px;overflow-x:auto}
+.desc{color:var(--muted);font-size:14px;margin:0 0 14px}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px;
+       overflow-x:auto}
+.toolbar{margin:0 0 10px}
+button{font-size:12px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;
+       background:var(--card);color:var(--accent);cursor:pointer}
+button:hover{border-color:var(--accent)}
+footer{color:var(--muted);font-size:11px;text-align:center;padding:20px}</style>
+</head>
+<body>
+<header>
+<h1>ClinicCare — 1 · Container / System</h1>
+<nav>
+<a href="index.html">&#8592; All diagrams</a>
+<a href="../architecture-diagrams.md">.md source</a>
+<a href="../architecture-diagrams.drawio">.drawio</a>
+</nav>
+</header>
+<main>
+<p class="desc">Users (patient/doctor/staff/super admin) reach the platform through the NGINX ingress; the Web (Next.js 14, :3100) and API (NestJS, :3000) run in the K8s namespace cliniccare against PostgreSQL 15 + Redis; external providers (S3/SMTP/SMS/payments/video) are configured via secrets but not yet wired.</p>
+<div class="toolbar"><button onclick="copySrc(this)">Copy mermaid source</button></div>
+<div class="panel"><pre class="mermaid">
+flowchart TB
+  subgraph USERS["Users"]
+    PAT["Patient"]
+    DOC["Doctor"]
+    STAFF["Reception / Nurse / Pharmacy / Accounts"]
+    SA["Super Admin"]
+  end
+
+  subgraph BROWSER["Browser — any subdomain"]
+    WEB["Next.js 14 Web · :3100<br/>standalone output, Tailwind + shadcn/ui<br/>middleware.ts (tenant subdomain parse)<br/>TenantThemeProvider + TenantBanner"]
+  end
+
+  subgraph INGRESS["NGINX Ingress — cliniccare-ingress"]
+    ING["api.cliniccare.local → api:80<br/>web.cliniccare.local → web:80"]
+  end
+
+  subgraph CLUSTER["K8s — namespace: cliniccare"]
+    API["NestJS API · :3000<br/>REST + OpenAPI /docs · /healthz<br/>24 controllers · Auth + RBAC + tenant guards"]
+    PG[("PostgreSQL 15 :5432<br/>postgres-pvc (persistent volume)")]
+    RD[("Redis :6379")]
+  end
+
+  subgraph EXT["External (configured via secrets, not yet wired) "]
+    S3["Object Storage (S3)"]
+    SMTP["SMTP / Email"]
+    SMSWP["SMS / WhatsApp"]
+    PAY["Payment gateway"]
+    VID["Video provider (teleconsult)"]
+  end
+
+  PAT --> WEB
+  DOC --> WEB
+  STAFF --> WEB
+  SA --> WEB
+
+  WEB --> ING
+  API --> ING
+  ING -.-> WEB
+  ING -.-> API
+
+  API --> PG
+  API --> RD
+  API -.-> S3
+  API -.-> SMTP
+  API -.-> SMSWP
+  API -.-> PAY
+  API -.-> VID
+</pre></div>
+</main>
+<footer>ClinicCare — generated from the implemented codebase  · docs/diagrams/</footer>
+<script>
+function copySrc(btn){
+  var pre = document.querySelector(".panel .mermaid");
+  var txt = pre.textContent;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function(){btn.textContent="Copied!";});
+  } else {
+    window.prompt("Copy mermaid source:", txt);
+  }
+}
+</script>
+</body>
+</html>

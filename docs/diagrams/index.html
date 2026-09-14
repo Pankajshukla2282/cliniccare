@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ClinicCare — Architecture Diagrams</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+     background:#f6f8fa;color:#1f2328;line-height:1.55}
+header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #d0d7de;
+       padding:10px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:650;flex:1 1 auto}
+nav{display:flex;gap:8px;flex-wrap:wrap}
+nav a{color:#0969da;text-decoration:none;font-size:13px;white-space:nowrap}
+nav a:hover{text-decoration:underline}
+main{max-width:1180px;margin:0 auto;padding:20px}
+.hero{text-align:center;margin:0 0 22px}
+.hero h2{font-size:24px;margin:0 0 6px}
+.hero p{color:#57606a;font-size:14px;margin:0}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.card{display:block;background:#fff;border:1px solid #d0d7de;border-radius:10px;
+      padding:16px;text-decoration:none;color:inherit;transition:border-color .15s}
+.card:hover{border-color:#0969da}
+.card h3{margin:0 0 6px;font-size:16px}
+.card p{margin:0 0 10px;color:#57606a;font-size:13px}
+.card .go{color:#0969da;font-weight:600;font-size:13px}
+.sources{margin:28px 0 0;text-align:center;font-size:13px}
+.sources a{color:#0969da;text-decoration:none;margin:0 8px;white-space:nowrap}
+.sources a:hover{text-decoration:underline}
+footer{color:#57606a;font-size:12px;text-align:center;padding:24px}
+</style>
+</head>
+<body>
+<header>
+<h1>ClinicCare</h1>
+<nav>
+<a href="../architecture-diagrams.md">.md source</a>
+<a href="../architecture-diagrams.drawio">.drawio</a>
+</nav>
+</header>
+<main>
+<div class="hero">
+<h2>Architecture Diagrams</h2>
+<p>One diagram per page, rendered from <code>docs/architecture-diagrams.md</code> (Mermaid v11 via CDN - needs internet).</p>
+</div>
+<div class="grid">
+<a class="card" href="d01-container.html">
+  <h3>1 · Container / System</h3>
+  <p>Users + browser (any subdomain) + NGINX ingress + K8s cluster (API web postgres redis) + external placeholders (S3 SMTP SMS payments video).</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+<a class="card" href="d02-modules.html">
+  <h3>2 · Modules / Block Diagram</h3>
+  <p>Five groups over the one NestJS app.module: Platform core, Directory, Clinical, Commerce, Engagement across the api (:3000).</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+<a class="card" href="d03-flow-signup.html">
+  <h3>3 · Flow - Tenant Signup + Booking</h3>
+  <p>Public /auth/tenant-signup -&gt; org + CLINIC_ADMIN + default clinic -&gt; seed -&gt; RBAC org scope -&gt; appointments.</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+<a class="card" href="d04-er.html">
+  <h3>4 · ER - Core Domains</h3>
+  <p>Tenant/org + directory + clinical (ER of the Prisma schema: 40+ models, 15 enums) - organizations to orders/prescriptions.</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+<a class="card" href="d05-dfd.html">
+  <h3>5 · DFD - Level 0 (Context)</h3>
+  <p>Patient / Doctor / Staff / Super Admin against the ClinicCare system :3000 with PostgreSQL + Redis stores.</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+<a class="card" href="d06-sequence-consult.html">
+  <h3>6 · Sequence - Consultation to Order</h3>
+  <p>Appointment -&gt; consultation -&gt; prescription -&gt; order -&gt; payment -&gt; invoice with RBAC permission checks.</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+<a class="card" href="d07-deployment.html">
+  <h3>7 · Deployment / K8s</h3>
+  <p>Namespace cliniccare on docker-desktop: api + web + postgres + redis deployments, HPA, PVCs, ingress cliniccare.local hosts.</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+<a class="card" href="d08-theming.html">
+  <h3>8 · Tenant Theming Sequence</h3>
+  <p>subdomain middleware -&gt; Prisma tenant lookup (react cache) -&gt; CSS-var theme provider -&gt; per-tenant UI.</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+<a class="card" href="d09-rbac.html">
+  <h3>9 · RBAC Role Hierarchy</h3>
+  <p>SUPER_ADMIN (global *) -&gt; org-scoped roles via RbacScope.org. Cross-tenant access is a 404.</p>
+  <span class="go">Open diagram &rarr;</span>
+</a>
+</div>
+<div class="sources">
+Sources: 
+<a href="../architecture-diagrams.md">architecture-diagrams.md</a>
+<a href="../architecture-diagrams.drawio">architecture-diagrams.drawio</a>
+</div>
+</main>
+<footer>ClinicCare - multi-tenant digital clinic platform · generated from the implemented codebase</footer>
+</body>
+</html>

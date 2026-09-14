@@ -1,0 +1,34 @@
+# Requires an ingress controller (e.g. ingress-nginx on docker-desktop).
+# Install once: `kubectl apply -f https://kind.sigs.k8s.io/examples/ingress/deploy-ingress-nginx.yaml`
+# (or the docker-desktop equivalent), then add to hosts file:
+#   127.0.0.1 api.cliniccare.local web.cliniccare.local
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cliniccare-ingress
+  namespace: cliniccare
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.cliniccare.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 80
+    - host: web.cliniccare.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80

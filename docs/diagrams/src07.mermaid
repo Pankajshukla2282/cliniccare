@@ -1,0 +1,41 @@
+flowchart TB
+  subgraph CLUSTER["K8s — docker-desktop, namespace: cliniccare"]
+    subgraph INFRA["State"]
+      PGDEP["Deployment postgres<br/>image postgres:15-alpine"]
+      PVC["PVC postgres-pvc"]
+      RDDEP["Deployment redis<br/>image redis:7-alpine"]
+    end
+    subgraph APP["Application"]
+      APID["Deployment api<br/>image cliniccare/api:dev"]
+      WEBD["Deployment web<br/>image cliniccare/web:dev"]
+    end
+    subgraph CP["Config & Scaling"]
+      CM["ConfigMaps<br/>nestjs-config, nextjs-config"]
+      SEC["Secrets<br/>postgres-credentials, api-secrets"]
+      HPA["HPA api-hpa / web-hpa<br/>(cpu + memory)"]
+    end
+    subgraph SERVI["Services"]
+      PGS["Service postgres :5432"]
+      RDS["Service redis :6379"]
+      APIS["Service api :3000"]
+      WEBS["Service web :3100"]
+    end
+    subgraph ING["Ingress nginx"]
+      INGR["cliniccare-ingress<br/>api.cliniccare.local<br/>web.cliniccare.local"]
+    end
+  end
+
+  INGR --> APIS
+  INGR --> WEBS
+  APID --> APIS
+  WEBD --> WEBS
+  APID --> PGS
+  APID --> RDS
+  PGDEP --> PGS
+  RDDEP --> RDS
+  PGDEP --> PVC
+  APID --> SEC
+  APID --> CM
+  WEBD --> CM
+  HPA --> APID
+  HPA --> WEBD

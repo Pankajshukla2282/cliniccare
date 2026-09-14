@@ -1,0 +1,101 @@
+# NestJS API config + Deployment + Service.
+# NOTE: image `cliniccare/api:dev` does not exist yet — it gets built
+# in Step 3 (NestJS scaffold + Dockerfile). postgres/redis above use public
+# images and will run immediately; this Deployment will wait for its image.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nestjs-config
+  namespace: cliniccare
+data:
+  NODE_ENV: "development"
+  PORT: "3000"
+  DATABASE_URL: "postgresql://clinic:clinic-change-me@postgres:5432/cliniccare"
+  REDIS_URL: "redis://redis:6379"
+  BULLMQ_REDIS_URL: "redis://redis:6379"
+  BULLMQ_DEFAULT_TTL: "86400"
+  JWT_EXPIRES_IN: "1d"
+  BCRYPT_SALT_ROUNDS: "10"
+  CORS_ORIGIN: "http://localhost:3000"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-secrets
+  namespace: cliniccare
+type: Opaque
+stringData:
+  JWT_SECRET: "dev-change-me"
+  RAZORPAY_KEY_ID: "CHANGE_ME"
+  RAZORPAY_KEY_SECRET: "CHANGE_ME"
+  SMS_API_KEY: "CHANGE_ME"
+  SMS_API_SECRET: "CHANGE_ME"
+  WHATSAPP_TOKEN: "CHANGE_ME"
+  EMAIL_SMTP_HOST: "CHANGE_ME"
+  EMAIL_SMTP_USER: "CHANGE_ME"
+  EMAIL_SMTP_PASSWORD: "CHANGE_ME"
+  AWS_ACCESS_KEY_ID: "CHANGE_ME"
+  AWS_SECRET_ACCESS_KEY: "CHANGE_ME"
+  AWS_BUCKET_NAME: "CHANGE_ME"
+  AWS_REGION: "ap-south-1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: cliniccare
+  labels:
+    app: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: cliniccare/api:dev
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: nestjs-config
+            - secretRef:
+                name: api-secrets
+          ports:
+            - containerPort: 3000
+          resources:
+            limits:
+              memory: "512Mi"
+              cpu: "750m"
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: cliniccare
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: ClusterIP
