@@ -1,5 +1,5 @@
 import { IsEnum, IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
-import { OrderStatus, OrderType } from '@prisma/client';
+import { OrderStatus, OrderType } from '../generated/prisma/client';
 
 export class OrderItemDto {
   @IsOptional()

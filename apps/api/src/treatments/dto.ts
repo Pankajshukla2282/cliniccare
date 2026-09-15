@@ -1,5 +1,5 @@
 import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString } from 'class-validator';
-import { TreatmentType } from '@prisma/client';
+import { TreatmentType } from '../generated/prisma/client';
 
 export class CreateTreatmentPlanDto {
   @IsInt()

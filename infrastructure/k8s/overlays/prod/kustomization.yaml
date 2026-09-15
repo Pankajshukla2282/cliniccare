@@ -1,0 +1,57 @@
+# Production overlay — consumes the base dev manifests and tunes them:
+#   - images point at ghcr.io/<owner>/ images pushed by the GitHub Actions
+#     pipeline; set the tag at render time (see build-deploy.yml)
+#   - more replicas, production env flags
+#
+# Render + preview:
+#   kubectl kustomize infrastructure/k8s/overlays/prod | sed 's/__IMAGE_TAG__/<sha>/g'
+#
+# Secrets: the base reads the repo-root .env via secretGenerator. In a shared
+# environment, do NOT keep real secrets in .env — source them from your cloud
+# secret manager (e.g. AWS SSM/Secret Manager) into the kustomize build or
+# create the api-secrets/postgres-credentials Secrets out-of-band from a vault.
+# TLS: terminate at the ingress (cert-manager / cloud LB) — see 40-ingress.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cliniccare
+
+resources:
+  - ../../base
+
+images:
+  - name: cliniccare/api
+    newName: ghcr.io/Pankajshukla2282/cliniccare-api
+    newTag: __IMAGE_TAG__
+  - name: cliniccare/web
+    newName: ghcr.io/Pankajshukla2282/cliniccare-web
+    newTag: __IMAGE_TAG__
+
+patches:
+  - target:
+      kind: Deployment
+      name: api
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: Deployment
+      name: web
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: ConfigMap
+      name: nestjs-config
+    patch: |-
+      - op: replace
+        path: /data/NODE_ENV
+        value: production
+      - op: replace
+        path: /data/TRUST_PROXY
+        value: "1"
+      - op: replace
+        path: /data/CORS_ORIGIN
+        value: https://web.cliniccare.example

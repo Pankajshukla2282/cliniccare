@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
-import { DoctorStatus } from '@prisma/client';
+import { DoctorStatus } from '../generated/prisma/client';
 
 export class UpdateDoctorDto {
   @IsOptional()

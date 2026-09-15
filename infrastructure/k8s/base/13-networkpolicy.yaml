@@ -1,0 +1,83 @@
+# Default-deny-ish network segmentation for the cliniccare namespace.
+# Enforced by most CNIs (Calico/Cilium); inert on CNIs without policy support
+# (docker-desktop falls back to permitting traffic, so local dev is unaffected).
+#
+# Effective rules (union across policies):
+#   - pods may reach other pods in this namespace, and the cluster DNS
+#   - api/web may egress to the internet (provider APIs: Razorpay/SMS/email/S3)
+#   - api/web accept inbound on :3000 (from the ingress controller, LB, or probes)
+#   - postgres/redis accept inbound ONLY from within this namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-namespace-internal
+  namespace: cliniccare
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector: {}
+  egress:
+    - to:
+        - podSelector: {}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: cliniccare
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-web-ingress
+  namespace: cliniccare
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [api, web]
+  policyTypes: [Ingress]
+  ingress:
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 3000
+---
+# Outbound HTTPS for api/web (external provider integrations).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-egress
+  namespace: cliniccare
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app
+        operator: In
+        values: [api, web]
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443

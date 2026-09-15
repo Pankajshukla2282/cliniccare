@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Role } from '@prisma/client';
+import { Role } from '../generated/prisma/client';
 import { CurrentUser, OrgId, Permissions, RequestUser } from '../common/decorators';
 import { RbacService, RbacScope } from './rbac.service';
 import { AssignPermissionDto, AssignRoleDto } from './rbac.dto';

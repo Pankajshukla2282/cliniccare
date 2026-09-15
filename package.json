@@ -13,10 +13,12 @@
     "build:web": "npm run build --workspace=apps/web"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "^7.10.0",
+    "dotenv": "^16.4.5"
   },
   "devDependencies": {
-    "prisma": "^5.22.0"
+    "prisma": "^7.10.0",
+    "tsx": "^4.19.0"
   },
   "engines": {
     "node": ">=18.0.0"

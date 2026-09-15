@@ -4,7 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { Role } from '@prisma/client';
+import { Role } from '../generated/prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
@@ -302,7 +302,8 @@ export class AuthService {
         expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
       },
     });
-    // In production: send email with token. For now, log it.
+    // In production: send email with token. For now, only the dev/dev-like
+    // environment leaks the token in the response.
     this.audit.log({
       entityType: 'user',
       entityId: user.id,
@@ -310,7 +311,7 @@ export class AuthService {
       performedBy: user.id,
       purpose: 'security',
     }).catch(() => {});
-    return { sent: true, _devToken: token };
+    return process.env.NODE_ENV === 'production' ? { sent: true } : { sent: true, _devToken: token };
   }
 
   async resetPassword(token: string, newPassword: string) {

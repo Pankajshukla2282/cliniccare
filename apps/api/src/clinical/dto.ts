@@ -1,5 +1,5 @@
 import { IsArray, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { ConsultationType } from '@prisma/client';
+import { ConsultationType } from '../generated/prisma/client';
 
 export class CreateConsultationDto {
   @IsInt()

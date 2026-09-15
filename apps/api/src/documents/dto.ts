@@ -1,5 +1,5 @@
 import { IsBoolean, IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
-import { DocumentType } from '@prisma/client';
+import { DocumentType } from '../generated/prisma/client';
 
 export class CreateDocumentDto {
   @IsOptional()

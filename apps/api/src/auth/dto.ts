@@ -1,4 +1,13 @@
-import { IsEmail, IsInt, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsInt, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+
+// Shared production password policy: min 8 chars, at least one letter and one
+// digit. Kept in one place so register/signup/change/reset stay consistent.
+const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&._-]{8,}$/;
+
+export const StrongPassword = (): PropertyDecorator =>
+  Matches(PASSWORD_PATTERN, {
+    message: 'Password must be at least 8 characters with at least one letter and one number',
+  });
 
 export class RegisterDto {
   @IsEmail()
@@ -6,6 +15,7 @@ export class RegisterDto {
 
   @IsString()
   @MinLength(8)
+  @StrongPassword()
   password!: string;
 
   @IsString()
@@ -33,6 +43,7 @@ export class TenantSignupDto {
 
   @IsString()
   @MinLength(8)
+  @StrongPassword()
   password!: string;
 
   @IsString()
@@ -73,6 +84,7 @@ export class ChangePasswordDto {
 
   @IsString()
   @MinLength(8)
+  @StrongPassword()
   newPassword!: string;
 }
 
@@ -87,5 +99,6 @@ export class ResetPasswordDto {
 
   @IsString()
   @MinLength(8)
+  @StrongPassword()
   newPassword!: string;
 }

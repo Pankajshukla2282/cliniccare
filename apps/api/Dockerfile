@@ -1,24 +1,54 @@
 # ClinicCare API — build context: cliniccare/ repo root
 # docker build -f apps/api/Dockerfile -t cliniccare/api:dev .
+# Runtime image is hardened: non-root, read-only code, healthcheck, and ships
+# the Prisma CLI + migration history so a pod can run `prisma migrate deploy`
+# (see the migrate initContainer in 20-api.yaml).
+
+# Runtime dependencies only (no dev tooling): pruned install in its own stage.
+FROM node:20-alpine AS deps
+WORKDIR /srv
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+RUN npm ci --no-audit --no-fund --omit=dev
+
+# Full install (dev deps included) to build + generate the Prisma client.
 FROM node:20-alpine AS build
 WORKDIR /srv
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY prisma ./prisma/
-RUN npm ci --no-audit --no-fund --workspace @cliniccare/api --include-workspace-root=false 2>/dev/null \
-  || npm install --no-audit --no-fund --workspace @cliniccare/api
+COPY prisma.config.ts ./
+RUN npm ci --no-audit --no-fund
 COPY apps/api/tsconfig*.json ./apps/api/
 COPY apps/api/src ./apps/api/src/
 WORKDIR /srv/apps/api
 RUN npx prisma generate --schema ../../prisma/schema.prisma
 RUN npm run build
-RUN npm prune --omit=dev
 
 FROM node:20-alpine AS runner
 ENV NODE_ENV=production
-WORKDIR /srv/apps/api
-COPY --from=build /srv/apps/api/dist ./dist
-COPY --from=build /srv/apps/api/node_modules ./node_modules
+WORKDIR /srv
+
+COPY --from=deps /srv/node_modules ./node_modules
+
+COPY --from=build /srv/package.json ./
+COPY --from=build /srv/prisma.config.ts ./
 COPY --from=build /srv/prisma ./prisma
+COPY --from=build /srv/apps/api/package.json ./apps/api/package.json
+COPY --from=build /srv/apps/api/dist ./apps/api/dist
+
+# Prisma CLI needed for `npx prisma migrate deploy` (it lives at the repo root
+# as a dev dependency, so bundle a pinned copy for the runtime image).
+# Pin to the same version the lockfile resolves (see package.json).
+ARG PRISMA_CLI_VERSION=7.10.0
+RUN npm install --no-audit --no-fund --global prisma@${PRISMA_CLI_VERSION}
+
+# Run as an unprivileged user.
+RUN addgroup -S app && adduser -S app -G app && chown -R app:app /srv
+USER app
+
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3000/healthz || exit 1
+
+CMD ["node", "apps/api/dist/main.js"]

@@ -1,0 +1,53 @@
+# Daily PostgreSQL backup (custom-format dump) onto a dedicated PVC.
+# Keeps the 7 most recent dumps. For cloud: prefer an S3/GCS-backed bucket
+# (update the command with upload-to-object-store steps) and snapshot the PVC.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backup-pvc
+  namespace: cliniccare
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-backup
+  namespace: cliniccare
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: backup
+              image: postgres:15-alpine
+              envFrom:
+                - secretRef:
+                    name: postgres-credentials
+              command:
+                - sh
+                - -c
+                - |
+                  set -e
+                  ts=$(date +%Y%m%d-%H%M%S)
+                  PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -h postgres -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /backups/cliniccare-$ts.dump
+                  ls -1t /backups/cliniccare-*.dump 2>/dev/null | tail -n +8 | xargs -r rm --
+                  echo "backup done: cliniccare-$ts.dump"
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: backup-pvc

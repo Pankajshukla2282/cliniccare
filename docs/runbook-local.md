@@ -1,21 +1,30 @@
-# ClinicCare — Deployment & Local Run Runbook
+# ClinicCare — Local Runbook (build + deploy)
 
-Everything verified against the current tree (`E:\Pankaj\ClinicCare\cliniccare`,
-Node 24.x, Windows + PowerShell 5.1, docker-desktop Kubernetes). Two tracks:
+Everything verified against the current tree
+(`E:\Pankaj\ClinicCare\cliniccare`, Node 24.x, Windows + PowerShell 5.1,
+docker-desktop Kubernetes). Two tracks:
 
 - **A — Run everything locally** (PostgreSQL/Redis in-cluster via port-forward,
   API + web as dev/standalone processes). This is the fast inner loop.
-- **B — Deploy to the cluster** (build `cliniccare/api:dev` +
-  `cliniccare/web:dev`, apply the kustomization, expose via ingress).
+- **B — Build images and deploy to the cluster** (docker build → kustomize base
+  → ingress). Also covers migrations, seeding, and smoke tests.
+
+Track C — cloud build + deploy — lives in
+[`docs/runbook-cloud.md`](runbook-cloud.md) and runs through the GitHub Actions
+pipeline.
 
 ## Prereqs
 
 - Node.js >= 18 (repo uses 24.x), npm workspaces monorepo
 - Kubernetes running (docker-desktop) + `kubectl` against it
-- `DATABASE_URL` for local Prisma CLI work:
+- Root `.env` populated (copy `.env.example` → `.env`). This is the single
+  source of credentials — Kustomize and Prisma/seed both read it.
+
+For CLI Prisma/dev-server work `prisma.config.ts` and `seed.ts` load `.env`
+themselves; only set an override in the terminal if you target a different DB:
 
 ```powershell
-$env:DATABASE_URL = "postgresql://clinic:clinic-change-me@localhost:5432/cliniccare"
+$env:DATABASE_URL = "postgresql://clinic:<PASSWORD-FROM-.env>@localhost:5432/cliniccare"
 ```
 
 ---
@@ -24,15 +33,16 @@ $env:DATABASE_URL = "postgresql://clinic:clinic-change-me@localhost:5432/clinicc
 
 ### A1. Bring up PostgreSQL + Redis (in-cluster, once)
 
+Apply the base; Secrets are generated from root `.env` by Kustomize, so use
+the load-restrictor pipeline (plain `kubectl apply -k` refuses to read `../.env`):
+
 ```powershell
 cd E:\Pankaj\ClinicCare\cliniccare
-kubectl apply -f infrastructure/k8s/00-namespace.yaml
-kubectl apply -f infrastructure/k8s/10-postgres.yaml
-kubectl apply -f infrastructure/k8s/11-redis.yaml
-kubectl get pods -n cliniccare            # wait until Running (1/1)
+kubectl kustomize infrastructure/k8s/base --load-restrictor LoadRestrictionsNone | kubectl apply -f -
+kubectl get pods -n cliniccare            # wait until postgres+redis Running (1/1)
 ```
 
-Then forward the DB + cache to localhost so API/web can connect:
+Forward the DB + cache to localhost so API/web can connect:
 
 ```powershell
 # run each in its own terminal
@@ -40,41 +50,51 @@ kubectl port-forward svc/postgres -n cliniccare 5432:5432
 kubectl port-forward svc/redis    -n cliniccare 6379:6379
 ```
 
-Keep these terminals open while developingchers. Verify port 5432 is listening
-before proceeding (`Get-NetTCPConnection -LocalPort 5432 -State Listen`).
+Verify 5432 listens before proceeding (`Get-NetTCPConnection -LocalPort 5432 -State Listen`).
 
 ### A2. Install + generate Prisma client
 
 ```powershell
 npm install --no-audit --no-fund
-$env:DATABASE_URL = "postgresql://clinic:clinic-change-me@localhost:5432/cliniccare"
-npx prisma generate --schema prisma/schema.prisma
-npx prisma db push --schema prisma/schema.prisma   # sync dev schema (local DB)
+npx prisma generate
+npx prisma validate
 ```
 
-### A3. Seed (idempotent)
+### A3. Apply migrations (not `db push`)
+
+A baseline migration `20260915000000_init` exists; never `db push` once
+migrations are in play, or the migrations table and schema can drift:
 
 ```powershell
-npx ts-node prisma/seed.ts   # platform org + SUPER_ADMIN, demo tenant (brand settings), RBAC matrix
+npx prisma migrate deploy   # applies pending migrations to the port-forwarded DB
+npx prisma migrate status   # expect: "Database schema is up to date!"
 ```
 
-Creds from seed:
+### A4. Seed (idempotent — safe to re-run)
 
-| Who            | Email                        | Password        |
-|----------------|------------------------------|-----------------|
-| Super admin    | `superadmin@cliniccare.local`| `SuperAdmin123!`|
-| Tenant admin   | `admin@cliniccare.local`     | `ChangeMe123!`  |
+```powershell
+npx tsx prisma/seed.ts   # platform org + super admin, demo tenant, RBAC matrix
+```
 
-### A4. Run the API
+Credentials come from root `.env` (`SEED_SUPER_ADMIN_PASSWORD`,
+`SEED_ADMIN_PASSWORD`) and are re-hashed on every run, so re-seeding also
+rotates the demo passwords to match `.env`.
+
+| Role          | Email                         | Password |
+|---------------|-------------------------------|----------|
+| Super admin   | `superadmin@cliniccare.local` | `$env:SEED_SUPER_ADMIN_PASSWORD` |
+| Tenant admin  | `admin@cliniccare.local`      | `$env:SEED_ADMIN_PASSWORD` |
+
+### A5. Run the API
 
 ```powershell
 npm run start:dev --workspace=apps/api
-# -> http://localhost:3000   swagger at http://localhost:3000/docs
+# -> http://localhost:3000   swagger at http://localhost:3000/docs (dev only)
 ```
 
 Health: `GET http://localhost:3000/healthz` → `{"status":"ok","service":"cliniccare-api",…}`.
 
-### A5. Run the web app
+### A6. Run the web app
 
 ```powershell
 npm run dev --workspace=apps/web
@@ -83,20 +103,19 @@ npm run dev --workspace=apps/web
 
 Health: `GET http://localhost:3100/healthz`.
 
-> Both servers need `DATABASE_URL` exported in the terminal where they start.
-> The web is dynamic (subdomain theming) and reads tenant settings through
-> Prisma at request time, so it also needs the DB reachable on 5432.
+> Both servers need the DB reachable on 5432 (port-forward). The web is
+> dynamic (subdomain theming) and reads tenant settings through Prisma at
+> request time.
+> `NEXT_PUBLIC_*` values are inlined at build time; for dev the default in
+> `next.config.js` (`http://localhost:3000`) applies.
 
-### A6. Verify multi-tenant theming locally
-
-Point the tenant subdomain at localhost, then open the branded skin:
+### A7. Verify multi-tenant theming locally
 
 ```
 # add to %SystemRoot%\System32\drivers\etc\hosts
 127.0.0.1 cliniccare-demo.localhost
 ```
 
-Then:
 - `http://cliniccare-demo.localhost:3100/` → teal tenant theme, tenant meta/title, org-scoped banner
 - `http://localhost:3100/` → default blue platform theme
 - Dev-only query fallback: `http://localhost:3100/?tenant=cliniccare-demo`
@@ -106,38 +125,91 @@ Quick CLI check (no hosts edit needed):
 ```powershell
 curl.exe -s -H "Host: cliniccare-demo.localhost" "http://127.0.0.1:3100/" | Select-String -Pattern "cliniccare-demo"
 ```
+
 Expect an `x-tenant-subdomain: cliniccare-demo` response header and tenant-branded HTML.
 
 ---
 
-## Track B — Deploy to the cluster
+## Track B — Build images and deploy to the cluster
 
-### B1. Build app images (requires Dockerfiles in apps/api, apps/web)
+The full in-cluster stack: postgres, redis, api, web, ingress, plus quota,
+network policy, HPA, PDB, and the backup CronJob.
+
+### B1. Build the app images
+
+Images build against the npm workspaces root (hoisted deps), so build from the
+repo root with the app's Dockerfile:
 
 ```powershell
 cd E:\Pankaj\ClinicCare\cliniccare
 docker build -t cliniccare/api:dev -f apps/api/Dockerfile .
 docker build -t cliniccare/web:dev -f apps/web/Dockerfile .
 ```
-(Images are pulled with `IfNotPresent` locally so you can iterate without a registry.)
 
-### B2. Apply the platform
+Notes:
+- The **api** image contains the Prisma CLI + `prisma/migrations`, so the
+  cluster can run `prisma migrate deploy` (see B3).
+- The **web** image is Next.js `output: standalone`; `NEXT_PUBLIC_API_URL` is
+  baked in at build time (pass via `--build-arg` for non-default targets).
+- Tagging `:dev` + `imagePullPolicy: IfNotPresent` lets you iterate locally
+  without pushing to a registry.
+
+Sanity-check a build locally before deploying:
 
 ```powershell
-kubectl apply -k infrastructure/k8s/
-kubectl get pods -n cliniccare        # api, web: Running
+docker run --rm -d --name api-smoke -p 12300:3000 cliniccare/api:dev
+curl.exe -s -o NUL -w "%{http_code}`n" http://127.0.0.1:12300/healthz   # 200
+docker rm -f api-smoke
+
+docker run --rm -d --name web-smoke -p 12301:3000 cliniccare/web:dev
+curl.exe -s -o NUL -w "%{http_code}`n" http://127.0.0.1:12301/healthz   # 200
+docker rm -f web-smoke
+```
+
+### B2. Apply the base to the cluster
+
+```powershell
+kubectl kustomize infrastructure/k8s/base --load-restrictor LoadRestrictionsNone | kubectl apply -f -
+```
+
+### B3. Migrations run automatically
+
+Every new api pod runs `npx prisma migrate deploy` in its `migrate`
+initContainer before the API starts (idempotent — `migrations` table tracks
+what already applied). Seed separately if you want demo data:
+
+```powershell
+kubectl -n cliniccare rollout status deploy/api --timeout=300s
+kubectl -n cliniccare rollout status deploy/web --timeout=300s
+kubectl get pods -n cliniccare        # all Running 1/1 (or 2/2 with HPA scaling)
 kubectl get ingress -n cliniccare
+# optional seed against the in-cluster DB:
+kubectl -n cliniccare exec deploy/api -- npx prisma db seed  # or psql-based via port-forward
 ```
 
-### B3. Ingress hostnames (update /etc/hosts)
+### B4. Ingress hostnames (update /etc/hosts)
 
 ```
-127.0.0.1 api.cliniccare.local web.cliniccare.local
+127.0.0.1 api.cliniccare.local web.cliniccare.local cliniccare-demo.cliniccare.local
 ```
 
-- `http://api.cliniccare.local/` → API
+- `http://api.cliniccare.local/` → API (`/healthz` returns 200)
 - `http://web.cliniccare.local/` → web (platform theme)
-- `http://cliniccare-demo.cliniccare.local/` → tenant-branded web (add to HPA/ingress rule)
+- `http://cliniccare-demo.cliniccare.local/` → tenant-branded web
+
+### B5. Roll, scale, backup
+
+```powershell
+# rolling update after a rebuild (images are IfNotPresent / tagged :dev — same pipeline):
+kubectl kustomize infrastructure/k8s/base --load-restrictor LoadRestrictionsNone | kubectl apply -f -
+kubectl -n cliniccare rollout status deploy/api
+
+# HPA (base) targets cpu 70% — api 1–5, web 1–3 replicas automatically
+kubectl -n cliniccare get hpa
+
+# daily 02:00 backup CronJob (keeps last 7 dumps on backup-pvc)
+kubectl -n cliniccare get cronjob
+```
 
 ---
 
@@ -145,20 +217,25 @@ kubectl get ingress -n cliniccare
 
 | Symptom | Cause / Fix |
 |---------|-------------|
-| API `ECONNREFUSED 5432` | port-forward not running — start `kubectl port-forward svc/postgres … 5432:5432` |
-| `P1012: Schema validation` on `db push` | stale schema — run `npm run prisma:validate` + `npx prisma generate` first |
-| `ImagePullBackOff` on api/web in k8s | images not built (Track B1) — build `cliniccare/api:dev` / `cliniccare/web:dev` first |
-| Web 500 on tenant subdomain | organization row/slug missing — run `npx ts-node prisma/seed.ts` |
+| API `ECONNREFUSED 5432` | port-forward not running — `kubectl port-forward svc/postgres … 5432:5432` |
+| api pod stuck `Init` | migrate initContainer failed — `kubectl -n cliniccare logs deploy/api -c migrate` |
+| `P1012: Schema validation` | stale client/knowledge — `npx prisma generate` + `npx prisma validate` |
+| `ImagePullBackOff` on api/web | images not built — Track B1; check `kubectl describe pod -n cliniccare` |
+| Web 500 on tenant subdomain | org row/slug missing — run `npx tsx prisma/seed.ts` |
 | `… organizationId ____ not found` 404 | cross-tenant access is intentionally blocked (org-scoped isolation) |
-| Port 3000/3100 busy | change dev port or stop the existing process (`Get-NetTCPConnection -LocalPort …`) |
+| Can't `apply -k` | Kustomize refuses to read `../.env` outside the dir — use the `kustomize`+pipe form |
+| Port 3000/3100 busy | change dev port or stop the existing process |
 
 ---
 
 ## Related files
-- [`docs/diagrams/index.html`](diagrams/index.html) — browsable
-  architecture diagrams (9 subpages, Mermaid v11 via CDN)
 
-- `infrastructure/k8s/` — namespace, postgres, redis, api, web, HPA, ingress (kustomization)
-- `prisma/seed.ts` + `prisma/schema.prisma` — seed + 40-model validated schema
-- `apps/api` — NestJS (auth/RBAC/tenants + domain modules, port 3000)
-- `apps/web` — Next.js (Tailwind + shadcn/ui, subdomain tenant theming, port 3100)
+- `infrastructure/k8s/` — `base/` (all manifests + kustomization) and
+  `overlays/prod/` (cloud tuning); see `infrastructure/k8s/README.md`
+- `docs/runbook-cloud.md` — cloud build + deploy via GitHub Actions
+- `prisma/seed.ts` + `prisma/schema.prisma` — seed + validated schema,
+  migrations in `prisma/migrations/`
+- `apps/api` — NestJS (auth/RBAC/tenants + domain modules, port 3000),
+  hardened: helmet, throttler, graceful shutdown
+- `apps/web` — Next.js (Tailwind + shadcn/ui, subdomain tenant theming,
+  standalone output, port 3000 in container / 3100 in dev)

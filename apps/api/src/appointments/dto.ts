@@ -1,5 +1,5 @@
 import { IsDateString, IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
-import { AppointmentStatus, ConsultationType } from '@prisma/client';
+import { AppointmentStatus, ConsultationType } from '../generated/prisma/client';
 
 export class BookAppointmentDto {
   @IsInt()

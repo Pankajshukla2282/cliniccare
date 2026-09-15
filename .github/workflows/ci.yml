@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [development, main]
+  push:
+    branches: [development, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Validate + build api/web
+    runs-on: ubuntu-latest
+    env:
+      # prisma.config.ts evaluates DATABASE_URL at generate/validate time;
+      # a placeholder keeps the CLI happy without touching a real database.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install workspace deps
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Validate Prisma schema
+        run: npx prisma validate
+
+      - name: Build API
+        run: npm run build:api
+
+      - name: Build Web (standalone)
+        run: npm run build:web
+        env:
+          # Inlined into the client bundle at build time; matches prod overlay.
+          NEXT_PUBLIC_API_URL: https://api.cliniccare.example

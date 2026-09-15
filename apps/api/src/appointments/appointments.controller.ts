@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { AppointmentStatus } from '@prisma/client';
+import { AppointmentStatus } from '../generated/prisma/client';
 import { CurrentUser, OrgId, Permissions, Public, RequestUser } from '../common/decorators';
 import { AppointmentsService } from './appointments.service';
 import { BookAppointmentDto, CancelAppointmentDto, RescheduleAppointmentDto, SlotQueryDto, UpdateAppointmentStatusDto } from './dto';

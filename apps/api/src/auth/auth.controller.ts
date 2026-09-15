@@ -1,8 +1,14 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser, Public, RequestUser } from '../common/decorators';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshDto, RegisterDto, ResetPasswordDto, TenantSignupDto } from './dto';
+
+// Sensitive public endpoints get tighter limits than the API-wide default:
+// brute-force / payload-spam protection without slowing legitimate traffic.
+const LOGIN_LIMIT = { default: { limit: 10, ttl: 60_000 } };
+const REGISTER_LIMIT = { default: { limit: 20, ttl: 60_000 } };
 
 @ApiTags('auth')
 @Controller('auth')
@@ -10,24 +16,28 @@ export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
   @Public()
+  @Throttle(REGISTER_LIMIT)
   @Post('register')
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
   }
 
   @Public()
+  @Throttle(REGISTER_LIMIT)
   @Post('tenant-signup')
   tenantSignup(@Body() dto: TenantSignupDto) {
     return this.auth.tenantSignup(dto);
   }
 
   @Public()
+  @Throttle(LOGIN_LIMIT)
   @Post('login')
   login(@Body() dto: LoginDto) {
     return this.auth.login(dto);
   }
 
   @Public()
+  @Throttle(LOGIN_LIMIT)
   @Post('refresh')
   refresh(@Body() dto: RefreshDto) {
     return this.auth.refresh(dto.refreshToken);
@@ -69,6 +79,7 @@ export class AuthController {
   }
 
   @Public()
+  @Throttle(LOGIN_LIMIT)
   @Post('forgot-password')
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.auth.forgotPassword(dto.email);

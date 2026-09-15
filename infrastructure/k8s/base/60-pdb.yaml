@@ -1,0 +1,24 @@
+# PodDisruptionBudgets guarantee availability during voluntary disruptions
+# (node drains, cluster maintenance). minAvailable: 1 keeps one replica up in
+# prod; with a single dev replica it simply blocks voluntary evictions.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: api-pdb
+  namespace: cliniccare
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: web-pdb
+  namespace: cliniccare
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: web

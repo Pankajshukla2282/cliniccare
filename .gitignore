@@ -26,7 +26,11 @@ logs/
 Thumbs.db
 
 # Prisma
-prisma/migrations/
+# prisma/migrations/ is intentionally committed: it is the migration history
+# used by `prisma migrate deploy` in production.
+
+# Generated Prisma client
+apps/api/src/generated/
 
 # Coverage
 coverage/

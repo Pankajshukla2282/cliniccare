@@ -150,11 +150,11 @@ npm install --no-audit --no-fund
 # Prisma client + schema (needs a live PostgreSQL; any DATABASE_URL works for generate)
 # copy prisma/.env.example to prisma/.env and adjust the password
 $env:DATABASE_URL="postgresql://clinic:clinic-change-me@localhost:5432/cliniccare"
-npx prisma generate --schema prisma/schema.prisma
-npx prisma db push --schema prisma/schema.prisma
+npx prisma generate
+npx prisma db push
 
 # Seed: platform org + SUPER_ADMIN + demo tenant + permissions
-npx ts-node prisma/seed.ts
+npx tsx prisma/seed.ts
 ```
 
 ## Run dev servers

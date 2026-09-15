@@ -1,0 +1,21 @@
+# Build context is the repo root for both app images. Keep the context lean.
+# prisma/migrations is intentionally NOT excluded: the API image ships it so a
+# pod can run `prisma migrate deploy`.
+.git
+node_modules
+**/.next
+dist
+coverage
+.nyc_output
+.env
+.env.*
+*.log
+logs
+infrastructure
+docs
+scripts
+.github
+.vscode
+.idea
+.DS_Store
+Thumbs.db

@@ -2,12 +2,15 @@
 // Kubernetes-native deployment (no Docker Compose).
 
 generator client {
-  provider = "prisma-client-js"
+  provider               = "prisma-client"
+  output                 = "../apps/api/src/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "cjs"
+  generatedFileExtension = "ts"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ---------------------------------------------------------------------------

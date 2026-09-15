@@ -1,10 +1,12 @@
 // ClinicCare seed: demo org, admin, RBAC permissions, specialties,
 // service catalog, notification templates. Idempotent (upserts).
-// Run: npx ts-node prisma/seed.ts  (from apps/api, with DATABASE_URL set)
-import { PrismaClient, Role } from '@prisma/client';
+// Run: npx tsx prisma/seed.ts  (with DATABASE_URL set, e.g. from .env)
+import 'dotenv/config';
+import { PrismaClient, Role } from '../apps/api/src/generated/prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
 import * as bcrypt from 'bcryptjs';
 
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' }) });
 
 const PERMISSIONS: Record<Role, string[]> = {
   SUPER_ADMIN: ['*'],
@@ -49,7 +51,7 @@ async function main() {
       plan: 'STARTER',
       status: 'ACTIVE',
       onboardingCompleted: true,
-      maxClinics: 1,
+      maxClinics: 3,
       maxDoctors: 5,
       maxPatients: 1000,
       settings: {
@@ -62,7 +64,7 @@ async function main() {
       plan: 'STARTER',
       status: 'ACTIVE',
       onboardingCompleted: true,
-      maxClinics: 1,
+      maxClinics: 3,
       maxDoctors: 5,
       maxPatients: 1000,
       settings: {
@@ -98,39 +100,51 @@ async function main() {
 
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@cliniccare.local';
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!';
+  const adminHash = await bcrypt.hash(adminPassword, 10);
   await prisma.user.upsert({
     where: { email: adminEmail },
     create: {
       organizationId: org.id,
       email: adminEmail,
-      passwordHash: await bcrypt.hash(adminPassword, 10),
+      passwordHash: adminHash,
       firstName: 'Clinic',
       lastName: 'Admin',
       primaryRole: 'ADMIN',
     },
-    update: {},
+    update: { passwordHash: adminHash },
   });
 
   const superAdminEmail = process.env.SEED_SUPER_ADMIN_EMAIL ?? 'superadmin@cliniccare.local';
   const superAdminPassword = process.env.SEED_SUPER_ADMIN_PASSWORD ?? 'SuperAdmin123!';
+  const superAdminHash = await bcrypt.hash(superAdminPassword, 10);
   await prisma.user.upsert({
     where: { email: superAdminEmail },
     create: {
       organizationId: platformOrg.id,
       email: superAdminEmail,
-      passwordHash: await bcrypt.hash(superAdminPassword, 10),
+      passwordHash: superAdminHash,
       firstName: 'Platform',
       lastName: 'Super Admin',
       primaryRole: 'SUPER_ADMIN',
     },
-    update: {},
+    update: { passwordHash: superAdminHash },
   });
 
-  const clinic = await prisma.clinic.upsert({
-    where: { id: 1 },
-    create: { organizationId: org.id, name: 'Main Clinic', city: 'Mumbai', state: 'Maharashtra' },
-    update: {},
-  });
+  const demoClinics = [
+    { id: 1, name: 'Main Clinic', city: 'Mumbai', state: 'Maharashtra' },
+    { id: 2, name: 'Pune Skin & Aesthetic', city: 'Pune', state: 'Maharashtra' },
+    { id: 3, name: 'Goa Wellness', city: 'Panaji', state: 'Goa' },
+  ];
+  const clinics = [];
+  for (const c of demoClinics) {
+    clinics.push(
+      await prisma.clinic.upsert({
+        where: { id: c.id },
+        create: { organizationId: org.id, name: c.name, city: c.city, state: c.state },
+        update: { organizationId: org.id, name: c.name, city: c.city, state: c.state },
+      }),
+    );
+  }
 
   for (const s of [
     { name: 'EECP', description: 'Enhanced External Counterpulsation therapy', category: 'Therapy' },
@@ -219,7 +233,7 @@ async function main() {
   });
 
   // eslint-disable-next-line no-console
-  console.log(`Seeded org ${org.id}, clinic ${clinic.id}, admin ${adminEmail}`);
+  console.log(`Seeded org ${org.id}, clinics ${clinics.map((c) => c.name).join(', ')}, admin ${adminEmail}`);
 }
 
 main()

@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AppointmentStatus, Prisma } from '@prisma/client';
+import { AppointmentStatus, Prisma } from '../generated/prisma/client';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { BookAppointmentDto, CancelAppointmentDto, RescheduleAppointmentDto, UpdateAppointmentStatusDto } from './dto';

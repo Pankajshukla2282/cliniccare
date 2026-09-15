@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Everything (including generator-created Secrets) goes here. The named YAMLs
+# also carry `namespace: cliniccare`, but generated resources only get one via
+# this field — without it kustomize would release the Secrets into `default`.
+namespace: cliniccare
+
+resources:
+  - 00-namespace.yaml
+  - 10-postgres.yaml
+  - 11-redis.yaml
+  - 12-quota.yaml
+  - 13-networkpolicy.yaml
+  - 20-api.yaml
+  - 21-web.yaml
+  - 30-hpa.yaml
+  - 40-ingress.yaml
+  - 60-pdb.yaml
+  - 70-backup.yaml
+
+# Secrets are generated from the repo-root .env (gitignored) so the only
+# source of credentials is that file / the environment. Keys are allowed to
+# overlap between generators; each deployment mounts its own Secret.
+generatorOptions:
+  # Keep the generated Secret names identical to the secretRef names used in
+  # the Deployments (kustomize does not rewrite envFrom.secretRef names).
+  disableNameSuffixHash: true
+secretGenerator:
+  - name: postgres-credentials
+    envs:
+      - ../../../.env
+    type: Opaque
+  - name: api-secrets
+    envs:
+      - ../../../.env
+    type: Opaque

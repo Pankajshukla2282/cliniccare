@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { Role } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AssignPermissionDto, AssignRoleDto } from './rbac.dto';
 
