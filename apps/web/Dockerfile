@@ -5,14 +5,14 @@
 # build generates it before `next build` (same steps as the API build).
 
 # Runtime dependencies only.
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 WORKDIR /srv
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
 RUN npm ci --no-audit --no-fund --omit=dev
 
 # Full install (Prisma CLI included) to generate the client + build.
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /srv
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
@@ -20,11 +20,12 @@ COPY prisma ./prisma/
 COPY prisma.config.ts ./
 RUN npm ci --no-audit --no-fund
 COPY apps/web ./apps/web/
+RUN mkdir -p /srv/apps/web/public
 WORKDIR /srv/apps/web
 RUN npx prisma generate --schema ../../prisma/schema.prisma
 RUN npm run build
 
-FROM node:20-alpine AS runner
+FROM node:24-alpine AS runner
 ENV NODE_ENV=production
 # Standalone output mirrors the monorepo layout (build root is /srv):
 # server.js lives at apps/web/server.js.

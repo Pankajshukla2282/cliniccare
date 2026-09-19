@@ -1,0 +1,143 @@
+Stage 1 — Repository & architecture audit
+
+Complete directory/module inventory
+Frontend/backend architecture
+Dependency and version audit
+Environment/configuration handling
+Separation of concerns
+Code duplication
+Dead/unused code
+Error-handling architecture
+API architecture
+Database/model architecture
+Authentication and authorization
+Current technical debt
+Production blockers
+
+Stage 2 — Security foundation
+
+Authentication
+RBAC/permissions
+Session/token security
+Password/security policies
+API authorization
+Input validation
+Output sanitization
+CORS
+CSRF where applicable
+Rate limiting
+Secure headers
+Secrets management
+Audit logging
+Protection of medical/patient information
+
+Stage 3 — Clinical data architecture
+
+Patients
+Doctors
+Receptionists/admins
+Appointments
+Consultations
+Medical history
+Prescriptions
+Medicines
+Lab reports
+Documents
+Billing
+Payments
+Relationships and referential integrity
+Immutable/traceable medical records where appropriate
+
+Stage 4 — Backend/API
+
+Consistent REST/API conventions
+Request validation
+Response contracts
+Error codes
+Pagination/filtering/sorting
+Transaction handling
+Idempotency
+Database indexes
+Query optimization
+Service/repository boundaries
+API versioning
+API documentation
+
+Stage 5 — Frontend
+
+Application architecture
+Routing
+Protected routes
+Permission-aware UI
+Form validation
+Loading/error/empty states
+API state management
+Reusable components
+Accessibility
+Responsive behavior
+Performance
+Production build configuration
+
+Stage 6 — Clinic workflows
+
+I'd specifically test the complete workflows rather than merely checking whether individual screens work:
+
+Patient → Appointment → Token/Queue → Consultation → Prescription → Lab → Billing → Payment → Patient History
+
+and the corresponding workflows for:
+
+Admin → Doctor → Receptionist
+
+Stage 7 — Reliability
+
+Centralized logging
+Exception handling
+Health checks
+Database backup/restore
+Recovery procedures
+Data consistency
+Concurrency handling
+Scheduled jobs
+Failure scenarios
+Monitoring
+
+Stage 8 — Testing
+
+Unit tests
+API tests
+Integration tests
+Authentication/authorization tests
+Database tests
+Frontend component tests
+End-to-end tests
+Security tests
+Regression suite
+
+Stage 9 — DevOps
+
+.env strategy
+Development/staging/production environments
+Git branching strategy
+Pull-request checks
+CI
+Automated tests
+Linting
+Formatting
+Dependency/security scanning
+Build verification
+Deployment
+Rollback
+
+Stage 10 — Production readiness
+
+Production configuration
+Database migration strategy
+Backup strategy
+Monitoring
+Alerting
+Security checklist
+Performance baseline
+Disaster recovery
+Documentation
+Admin/staff documentation
+Final go-live checklist
