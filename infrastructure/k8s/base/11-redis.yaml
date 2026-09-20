@@ -19,7 +19,15 @@ spec:
     spec:
       containers:
         - name: redis
-          image: redis:7-alpine
+          image: redis:8.2.10-bookworm
+          command: ["sh", "-c"]
+          args: ["exec redis-server --requirepass \"$REDIS_PASSWORD\" --appendonly no"]
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: REDIS_PASSWORD
           ports:
             - containerPort: 6379
           resources:
@@ -31,16 +39,14 @@ spec:
               cpu: "125m"
           readinessProbe:
             exec:
-              command:
-                - redis-cli
-                - ping
+              command: ["sh", "-c"]
+              args: ["redis-cli -a \"$REDIS_PASSWORD\" ping"]
             initialDelaySeconds: 5
             periodSeconds: 5
           livenessProbe:
             exec:
-              command:
-                - redis-cli
-                - ping
+              command: ["sh", "-c"]
+              args: ["redis-cli -a \"$REDIS_PASSWORD\" ping"]
             initialDelaySeconds: 30
             periodSeconds: 10
 ---

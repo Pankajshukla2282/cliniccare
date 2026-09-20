@@ -1,10 +1,3 @@
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
 /**
  * Maps an `Organization.settings` JSON payload onto CSS custom properties.
  * Each key is expressed as an HSL triplet `"H S% L%"`, mirroring the tokens

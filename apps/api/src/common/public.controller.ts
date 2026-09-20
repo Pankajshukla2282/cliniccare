@@ -1,4 +1,4 @@
-import { Controller, Get, Param, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, NotFoundException, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,6 +7,29 @@ import { PrismaService } from '../prisma/prisma.service';
 @Controller()
 export class PublicController {
   constructor(private readonly prisma: PrismaService) {}
+
+  @Public()
+  @Get('public/tenant/:slug')
+  async getTenant(@Param('slug') slug: string) {
+    const tenant = await this.prisma.organization.findFirst({
+      where: {
+        slug: slug.trim().toLowerCase(),
+        status: 'ACTIVE',
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        settings: true,
+      },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException('Tenant not found');
+    }
+
+    return tenant;
+  }
 
   @Public()
   @Get('public/doctors')

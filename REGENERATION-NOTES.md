@@ -1,0 +1,1 @@
+The supplied archive contained prisma/ only. The apps/ directory in this regenerated package is therefore a clean, compile-oriented baseline using the package versions visible in the ClinicCare lockfile/source context. Existing feature code from an unavailable apps archive is not represented here.

@@ -16,6 +16,7 @@ export interface RequestUser {
   role: string;
   permissions: string[];
   organizationId: number;
+  clinicId?: number | null;
 }
 
 export const CurrentUser = createParamDecorator(

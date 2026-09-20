@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("start", "stop")]
+    [ValidateSet("start", "stop", "build")]
     [string]$Action
 )
 
@@ -19,6 +19,10 @@ switch ($Action) {
 
     "stop" {
         $TargetScript = Join-Path $ScriptsDir "stop-dev.ps1"
+    }
+
+    "build" {
+        $TargetScript = Join-Path $ScriptsDir "build-all.ps1"
     }
 }
 

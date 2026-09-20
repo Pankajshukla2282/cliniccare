@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { Public } from '../common/decorators';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -8,13 +8,31 @@ export class HealthController {
 
   @Public()
   @Get('healthz')
-  async check() {
-    const dbOk = await this.prisma.$queryRawUnsafe('SELECT 1').then(() => true).catch(() => false);
+  liveness() {
     return {
-      status: dbOk ? 'ok' : 'degraded',
+      status: 'ok',
       service: 'cliniccare-api',
       time: new Date().toISOString(),
-      db: dbOk ? 'connected' : 'disconnected',
     };
+  }
+
+  @Public()
+  @Get('readyz')
+  async readiness() {
+    try {
+      await this.prisma.$queryRaw`SELECT 1`;
+      return {
+        status: 'ok',
+        service: 'cliniccare-api',
+        time: new Date().toISOString(),
+        dependencies: { database: 'connected' },
+      };
+    } catch {
+      throw new ServiceUnavailableException({
+        status: 'degraded',
+        service: 'cliniccare-api',
+        dependencies: { database: 'disconnected' },
+      });
+    }
   }
 }

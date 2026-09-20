@@ -1,19 +1,43 @@
-import { PrismaClient } from '../../api/src/generated/prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { cache } from 'react';
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+export type Tenant = {
+  id: number;
+  name: string;
+  slug: string;
+  settings: unknown;
+};
 
-export const prisma =
-  globalForPrisma.prisma ?? new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' }) });
+const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3100';
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+/**
+ * Resolve the current tenant through the NestJS API.
+ *
+ * The web application deliberately does not import Prisma or any API source
+ * files. This keeps the Next.js bundle independent from the API's generated
+ * Prisma client and database runtime.
+ */
+export const getTenantBySubdomain = cache(async (subdomain: string): Promise<Tenant | null> => {
+  const slug = subdomain.trim().toLowerCase();
+  if (!slug) return null;
 
-// cache() dedupes within a single request: layout metadata, layout render, and
-// the page all call this but only one DB query runs.
-export const getTenantBySubdomain = cache(async (subdomain: string) => {
-  return prisma.organization.findUnique({
-    where: { slug: subdomain },
-    select: { id: true, name: true, slug: true, settings: true },
-  });
+  const response = await fetch(
+    `${apiUrl.replace(/\/$/, '')}/api/v1/public/tenant/${encodeURIComponent(slug)}`,
+    {
+      headers: {
+        Accept: 'application/json',
+      },
+      next: {
+        revalidate: 60,
+        tags: [`tenant:${slug}`],
+      },
+    },
+  );
+
+  if (response.status === 404) return null;
+
+  if (!response.ok) {
+    throw new Error(`Tenant lookup failed with HTTP ${response.status}`);
+  }
+
+  return (await response.json()) as Tenant;
 });

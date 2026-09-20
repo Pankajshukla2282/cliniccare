@@ -8,17 +8,17 @@ metadata:
   name: nestjs-config
   namespace: cliniccare
 data:
-  NODE_ENV: "development"
+  NODE_ENV: "production"
   PORT: "3000"
-  REDIS_URL: "redis://redis:6379"
-  BULLMQ_REDIS_URL: "redis://redis:6379"
+  # REDIS_URL/BULLMQ_REDIS_URL are composed from the secret at pod startup.
+  REDIS_DB: "0"
   BULLMQ_DEFAULT_TTL: "86400"
-  JWT_EXPIRES_IN: "1d"
-  BCRYPT_SALT_ROUNDS: "10"
+  JWT_EXPIRES_IN: "15m"
+  BCRYPT_SALT_ROUNDS: "12"
   THROTTLE_TTL_MS: "60000"
   THROTTLE_LIMIT: "100"
   TRUST_PROXY: "1"
-  CORS_ORIGIN: "http://localhost:3000"
+  CORS_ORIGIN: "https://app.example.com"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -48,6 +48,8 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         # Applies pending Prisma migrations before the API starts serving.
         # Runs once per new pod; idempotent thanks to the migrations table.
@@ -61,6 +63,15 @@ spec:
           env:
             - name: DATABASE_URL
               value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: REDIS_PASSWORD
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis:6379"
+            - name: BULLMQ_REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis:6379"
           envFrom:
             - secretRef:
                 name: api-secrets
@@ -71,6 +82,9 @@ spec:
             limits:
               memory: "256Mi"
               cpu: "500m"
+      volumes:
+        - name: logs
+          emptyDir: {}
       containers:
         - name: api
           image: cliniccare/api:dev
@@ -78,11 +92,28 @@ spec:
           env:
             - name: DATABASE_URL
               value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: api-secrets
+                  key: REDIS_PASSWORD
+            - name: REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis:6379"
+            - name: BULLMQ_REDIS_URL
+              value: "redis://:$(REDIS_PASSWORD)@redis:6379"
           envFrom:
             - configMapRef:
                 name: nestjs-config
             - secretRef:
                 name: api-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: logs
+              mountPath: /srv/logs
           ports:
             - containerPort: 3000
           resources:
@@ -100,7 +131,7 @@ spec:
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: 3000
             initialDelaySeconds: 15
             periodSeconds: 5

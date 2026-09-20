@@ -23,8 +23,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24.21.0
           cache: npm
+
+      - name: Verify runtime baseline
+        run: |
+          node --version
+          npm --version
+          node -e "if (process.version !== 'v24.21.0') process.exit(1)"
 
       - name: Install workspace deps
         run: npm ci
@@ -34,6 +40,18 @@ jobs:
 
       - name: Validate Prisma schema
         run: npx prisma validate
+
+      - name: Verify production manifests
+        run: npm run baseline:verify
+
+      - name: Typecheck API
+        run: npm run typecheck:api
+
+      - name: Typecheck Web
+        run: npm run typecheck:web
+
+      - name: Dependency audit
+        run: npm audit --audit-level=high
 
       - name: Build API
         run: npm run build:api

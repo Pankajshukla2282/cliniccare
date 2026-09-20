@@ -22,7 +22,7 @@ export class AuditService {
         where: { id: entry.performedBy },
         select: { organizationId: true },
       });
-      organizationId = actor?.organizationId ?? null;
+      organizationId = actor?.organizationId ?? undefined;
     }
     return this.prisma.auditLog.create({
       data: {

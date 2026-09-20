@@ -35,3 +35,7 @@ apps/api/src/generated/
 # Coverage
 coverage/
 .nyc_output/
+
+# Runtime logs (centralized under repository-root logs/)
+logs/*.log
+logs/*.jsonl

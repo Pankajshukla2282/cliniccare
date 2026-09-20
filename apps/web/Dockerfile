@@ -5,14 +5,14 @@
 # build generates it before `next build` (same steps as the API build).
 
 # Runtime dependencies only.
-FROM node:24-alpine AS deps
+FROM node:24.21.0-bookworm-slim AS deps
 WORKDIR /srv
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
 RUN npm ci --no-audit --no-fund --omit=dev
 
 # Full install (Prisma CLI included) to generate the client + build.
-FROM node:24-alpine AS build
+FROM node:24.21.0-bookworm-slim AS build
 WORKDIR /srv
 COPY package.json package-lock.json ./
 COPY apps/web/package.json ./apps/web/
@@ -25,7 +25,7 @@ WORKDIR /srv/apps/web
 RUN npx prisma generate --schema ../../prisma/schema.prisma
 RUN npm run build
 
-FROM node:24-alpine AS runner
+FROM node:24.21.0-bookworm-slim AS runner
 ENV NODE_ENV=production
 # Standalone output mirrors the monorepo layout (build root is /srv):
 # server.js lives at apps/web/server.js.
@@ -35,11 +35,13 @@ COPY --from=build /srv/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /srv/apps/web/public ./apps/web/public
 
 # Run as an unprivileged user.
-RUN addgroup -S app && adduser -S app -G app && chown -R app:app /srv
+RUN groupadd --system app && useradd --system --gid app --home-dir /srv app && chown -R app:app /srv
 USER app
+
+RUN mkdir -p /srv/logs
 
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:3000/healthz || exit 1
+  CMD node -e "fetch('http://127.0.0.1:3000/healthz').then(r => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))" 
 
 CMD ["node", "apps/web/server.js"]

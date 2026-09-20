@@ -12,6 +12,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto, RegisterDto, TenantSignupDto } from './dto';
 
 const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const BCRYPT_ROUNDS = Math.max(10, Number(process.env.BCRYPT_SALT_ROUNDS ?? 12));
 const TENANT_TRIAL_DAYS = 14;
 const DEFAULT_TENANT_PLAN = 'STARTER';
 const DEFAULT_TENANT_LIMITS = { maxClinics: 1, maxDoctors: 5, maxPatients: 1000 };
@@ -48,7 +49,7 @@ export class AuthService {
       where: { id: userId },
       select: { organizationId: true },
     });
-    const orgId = user?.organizationId ?? null;
+    const orgId = user?.organizationId ?? undefined;
     const [extraRoles, perms] = await Promise.all([
       this.prisma.userRole.findMany({ where: { userId } }),
       this.prisma.rolePermission.findMany({
@@ -67,6 +68,7 @@ export class AuthService {
       data: {
         userId,
         tokenHash: hashToken(refreshToken),
+        type: 'SESSION',
         expiresAt: new Date(Date.now() + REFRESH_TTL_MS),
       },
     });
@@ -90,7 +92,7 @@ export class AuthService {
         organizationId: dto.organizationId,
         email: dto.email,
         phone: dto.phone,
-        passwordHash: await bcrypt.hash(dto.password, 10),
+        passwordHash: await bcrypt.hash(dto.password, BCRYPT_ROUNDS),
         firstName: dto.firstName,
         lastName: dto.lastName,
         primaryRole: role,
@@ -167,7 +169,7 @@ export class AuthService {
         clinicId: clinic.id,
         email: dto.email,
         phone: dto.phone,
-        passwordHash: await bcrypt.hash(dto.password, 10),
+        passwordHash: await bcrypt.hash(dto.password, BCRYPT_ROUNDS),
         firstName: dto.firstName,
         lastName: dto.lastName,
         primaryRole: Role.CLINIC_ADMIN,
@@ -224,16 +226,19 @@ export class AuthService {
     if (!row || row.revokedAt || row.expiresAt < new Date() || row.user.status !== 'ACTIVE') {
       throw new UnauthorizedException('Invalid refresh token');
     }
-    await this.prisma.refreshToken.update({
-      where: { id: row.id },
+    const consumed = await this.prisma.refreshToken.updateMany({
+      where: { id: row.id, type: 'SESSION', revokedAt: null },
       data: { revokedAt: new Date() },
     });
+    if (consumed.count !== 1) {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
     return this.issueTokens(row.user.id, row.user.email, row.user.primaryRole, row.user.organizationId);
   }
 
   async logout(refreshToken: string) {
     await this.prisma.refreshToken.updateMany({
-      where: { tokenHash: hashToken(refreshToken), revokedAt: null },
+      where: { tokenHash: hashToken(refreshToken), type: 'SESSION', revokedAt: null },
       data: { revokedAt: new Date() },
     });
     return { revoked: true };
@@ -241,7 +246,7 @@ export class AuthService {
 
   listSessions(userId: number) {
     return this.prisma.refreshToken.findMany({
-      where: { userId, revokedAt: null, expiresAt: { gt: new Date() } },
+      where: { userId, type: 'SESSION', revokedAt: null, expiresAt: { gt: new Date() } },
       select: { id: true, createdAt: true, expiresAt: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -249,7 +254,7 @@ export class AuthService {
 
   async revokeSession(userId: number, sessionId: number) {
     await this.prisma.refreshToken.updateMany({
-      where: { id: sessionId, userId, revokedAt: null },
+      where: { id: sessionId, userId, type: 'SESSION', revokedAt: null },
       data: { revokedAt: new Date() },
     });
     return { revoked: true };
@@ -257,7 +262,7 @@ export class AuthService {
 
   async revokeAllSessions(userId: number) {
     await this.prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
+      where: { userId, type: 'SESSION', revokedAt: null },
       data: { revokedAt: new Date() },
     });
     return { revoked: true };
@@ -270,11 +275,11 @@ export class AuthService {
     if (!ok) throw new BadRequestException('Current password is incorrect');
     await this.prisma.user.update({
       where: { id: userId },
-      data: { passwordHash: await bcrypt.hash(newPassword, 10) },
+      data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_ROUNDS) },
     });
     // Revoke all sessions on password change for security
     await this.prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
+      where: { userId, type: 'SESSION', revokedAt: null },
       data: { revokedAt: new Date() },
     });
     try {
@@ -299,6 +304,7 @@ export class AuthService {
       data: {
         userId: user.id,
         tokenHash,
+        type: 'PASSWORD_RESET',
         expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
       },
     });
@@ -316,8 +322,8 @@ export class AuthService {
 
   async resetPassword(token: string, newPassword: string) {
     const tokenHash = createHash('sha256').update(token).digest('hex');
-    const row = await this.prisma.refreshToken.findUnique({
-      where: { tokenHash },
+    const row = await this.prisma.refreshToken.findFirst({
+      where: { tokenHash, type: 'PASSWORD_RESET' },
       include: { user: true },
     });
     if (!row || row.revokedAt || row.expiresAt < new Date()) {
@@ -325,10 +331,14 @@ export class AuthService {
     }
     await this.prisma.user.update({
       where: { id: row.userId },
-      data: { passwordHash: await bcrypt.hash(newPassword, 10) },
+      data: { passwordHash: await bcrypt.hash(newPassword, BCRYPT_ROUNDS) },
     });
     await this.prisma.refreshToken.updateMany({
-      where: { userId: row.userId, revokedAt: null },
+      where: { userId: row.userId, type: 'SESSION', revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    await this.prisma.refreshToken.update({
+      where: { id: row.id },
       data: { revokedAt: new Date() },
     });
     return { reset: true };

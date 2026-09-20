@@ -8,6 +8,8 @@ import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: process.env.DATABASE_URL ?? '' }) });
 
+const BCRYPT_ROUNDS = Math.max(12, Number(process.env.BCRYPT_SALT_ROUNDS ?? 12));
+
 const PERMISSIONS: Record<Role, string[]> = {
   SUPER_ADMIN: ['*'],
   ADMIN: ['*'],
@@ -99,8 +101,13 @@ async function main() {
   }
 
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@cliniccare.local';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe123!';
-  const adminHash = await bcrypt.hash(adminPassword, 10);
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const superAdminPassword = process.env.SEED_SUPER_ADMIN_PASSWORD;
+  if (process.env.NODE_ENV === 'production' && (!adminPassword || !superAdminPassword)) {
+    throw new Error('Production seed requires SEED_ADMIN_PASSWORD and SEED_SUPER_ADMIN_PASSWORD');
+  }
+  const effectiveAdminPassword = adminPassword ?? 'ChangeMe123!';
+  const adminHash = await bcrypt.hash(effectiveAdminPassword, BCRYPT_ROUNDS);
   await prisma.user.upsert({
     where: { email: adminEmail },
     create: {
@@ -115,8 +122,8 @@ async function main() {
   });
 
   const superAdminEmail = process.env.SEED_SUPER_ADMIN_EMAIL ?? 'superadmin@cliniccare.local';
-  const superAdminPassword = process.env.SEED_SUPER_ADMIN_PASSWORD ?? 'SuperAdmin123!';
-  const superAdminHash = await bcrypt.hash(superAdminPassword, 10);
+  const effectiveSuperAdminPassword = superAdminPassword ?? 'SuperAdmin123!';
+  const superAdminHash = await bcrypt.hash(effectiveSuperAdminPassword, BCRYPT_ROUNDS);
   await prisma.user.upsert({
     where: { email: superAdminEmail },
     create: {

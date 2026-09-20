@@ -1,26 +1,46 @@
 {
   "name": "cliniccare",
+  "version": "0.1.0",
   "private": true,
   "workspaces": [
     "apps/*"
   ],
   "scripts": {
-    "db:push": "prisma db push",
     "db:generate": "prisma generate",
+    "db:push": "prisma db push",
     "db:studio": "prisma studio",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
     "prisma:validate": "prisma validate",
-    "build:api": "npm run build --workspace=apps/api",
-    "build:web": "npm run build --workspace=apps/web"
+    "typecheck:api": "tsc -p apps/api/tsconfig.json --noEmit",
+    "typecheck:web": "tsc -p apps/web/tsconfig.json --noEmit",
+    "build:api": "npm run build --workspace=@cliniccare/api",
+    "build:web": "npm run build --workspace=@cliniccare/web",
+    "build:all": "npm run db:generate && npm run build:api && npm run build:web",
+    "lint:api": "eslint \"apps/api/src/**/*.ts\"",
+    "lint:web": "eslint \"apps/web/**/*.{ts,tsx,js,mjs}\"",
+    "lint": "npm run lint:api && npm run lint:web",
+    "security:audit": "npm audit --audit-level=high",
+    "test:security": "npm run typecheck:api && npm run typecheck:web && npm run security:audit",
+    "baseline:verify": "node scripts/verify-production-baseline.mjs"
   },
   "dependencies": {
-    "@prisma/client": "^7.10.0",
-    "dotenv": "^16.4.5"
+    "@nestjs/config": "^12.0.0",
+    "dotenv": "^16.4.5",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
   },
   "devDependencies": {
-    "prisma": "^7.10.0",
-    "tsx": "^4.19.0"
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "9.39.5",
+    "prisma": "7.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "7.0.2"
   },
   "engines": {
-    "node": ">=24.0.0"
-  }
+    "node": "24.21.0",
+    "npm": ">=11 <12"
+  },
+  "packageManager": "npm@11.19.1"
 }

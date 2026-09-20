@@ -7,7 +7,7 @@ metadata:
   namespace: cliniccare
 data:
   NEXT_PUBLIC_API_URL: "http://api.cliniccare.svc.cluster.local"
-  NEXT_PUBLIC_ENV: "development"
+  NEXT_PUBLIC_ENV: "production"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -37,6 +37,11 @@ spec:
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: logs
+          emptyDir: {}
       containers:
         - name: web
           image: cliniccare/web:dev
@@ -49,6 +54,14 @@ spec:
                 name: nextjs-config
             - secretRef:
                 name: api-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: logs
+              mountPath: /srv/logs
           ports:
             - containerPort: 3000
           resources:

@@ -23,8 +23,8 @@ export class UsersController {
 
   @Permissions('user.manage')
   @Post()
-  create(@OrgId() orgId: number, @Body() dto: CreateUserDto) {
-    return this.users.create(orgId, dto);
+  create(@OrgId() orgId: number, @Body() dto: CreateUserDto, @CurrentUser() actor: RequestUser) {
+    return this.users.create(orgId, dto, actor);
   }
 
   @Permissions('user.read')
@@ -35,13 +35,23 @@ export class UsersController {
 
   @Permissions('user.manage')
   @Patch(':id')
-  update(@Param('id', ParseIntPipe) id: number, @OrgId() orgId: number, @Body() dto: UpdateUserDto) {
-    return this.users.update(id, orgId, dto);
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @OrgId() orgId: number,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.users.update(id, orgId, dto, actor);
   }
 
   @Permissions('user.manage')
   @Post(':id/roles')
-  assignRole(@Param('id', ParseIntPipe) id: number, @OrgId() orgId: number, @Body() dto: AssignRoleDto) {
-    return this.users.assignRole(id, orgId, dto);
+  assignRole(
+    @Param('id', ParseIntPipe) id: number,
+    @OrgId() orgId: number,
+    @Body() dto: AssignRoleDto,
+    @CurrentUser() actor: RequestUser,
+  ) {
+    return this.users.assignRole(id, orgId, dto, actor);
   }
 }
