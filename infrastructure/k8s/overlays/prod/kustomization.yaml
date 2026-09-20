@@ -53,5 +53,5 @@ patches:
         path: /data/TRUST_PROXY
         value: "1"
       - op: replace
-        path: /data/CORS_ORIGIN
+        path: /data/WEB_ORIGIN
         value: https://web.cliniccare.example

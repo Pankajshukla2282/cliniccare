@@ -1,7 +1,9 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3100';
+import { webConfig } from './config';
+
+const API_URL = webConfig.apiUrl;
 
 export async function getTenant(slug: string) {
-  const response = await fetch(`${API_URL}/api/v1/public/tenant/${encodeURIComponent(slug)}`, {
+  const response = await fetch(`${API_URL}${webConfig.apiBasePath}/public/tenant/${encodeURIComponent(slug)}`, {
     next: { revalidate: 60 }
   });
   if (!response.ok) return null;

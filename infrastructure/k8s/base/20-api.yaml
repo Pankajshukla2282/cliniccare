@@ -9,16 +9,26 @@ metadata:
   namespace: cliniccare
 data:
   NODE_ENV: "production"
-  PORT: "3000"
+  API_HOST: "0.0.0.0"
+  API_PORT: "3000"
+  API_BASE_PATH: "/api/v1"
   # REDIS_URL/BULLMQ_REDIS_URL are composed from the secret at pod startup.
   REDIS_DB: "0"
   BULLMQ_DEFAULT_TTL: "86400"
   JWT_EXPIRES_IN: "15m"
   BCRYPT_SALT_ROUNDS: "12"
-  THROTTLE_TTL_MS: "60000"
-  THROTTLE_LIMIT: "100"
+  RATE_LIMIT_TTL_MS: "60000"
+  RATE_LIMIT_MAX: "100"
+  AUTH_RATE_LIMIT_MAX: "10"
+  CORS_ALLOW_CREDENTIALS: "true"
+  CSRF_ENABLED: "true"
+  PHI_NO_STORE: "true"
+  ENABLE_SWAGGER: "false"
+  LOG_DIR: "/srv/logs"
+  LOG_LEVEL: "info"
   TRUST_PROXY: "1"
-  CORS_ORIGIN: "https://app.example.com"
+  WEB_ORIGIN: "https://web.cliniccare.example"
+  CSRF_ALLOWED_ORIGINS: "https://web.cliniccare.example"
 ---
 apiVersion: apps/v1
 kind: Deployment

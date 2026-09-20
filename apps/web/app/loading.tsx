@@ -1,0 +1,1 @@
+export default function Loading(){return <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center p-6"><div role="status" aria-live="polite" className="text-sm text-slate-600">Loading ClinicCare…</div></main>}

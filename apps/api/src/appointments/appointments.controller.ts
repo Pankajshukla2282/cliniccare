@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AppointmentStatus } from '../generated/prisma/client';
-import { CurrentUser, OrgId, Permissions, Public, RequestUser } from '../common/decorators';
+import { CurrentUser, OrgId, Permissions, Public, RequestUser, RequireIdempotency } from '../common/decorators';
 import { AppointmentsService } from './appointments.service';
 import { BookAppointmentDto, CancelAppointmentDto, RescheduleAppointmentDto, SlotQueryDto, UpdateAppointmentStatusDto } from './dto';
 
@@ -31,6 +31,7 @@ export class AppointmentsController {
   }
 
   @Permissions('appointment.manage')
+  @RequireIdempotency()
   @Post()
   book(@OrgId() orgId: number, @Body() dto: BookAppointmentDto, @CurrentUser() user: RequestUser) {
     return this.appointments.book(orgId, dto, user.sub);

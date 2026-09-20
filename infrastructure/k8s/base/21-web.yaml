@@ -7,7 +7,15 @@ metadata:
   namespace: cliniccare
 data:
   NEXT_PUBLIC_API_URL: "http://api.cliniccare.svc.cluster.local"
+  NEXT_PUBLIC_API_BASE_PATH: "/api/v1"
   NEXT_PUBLIC_ENV: "production"
+  TENANT_BASE_DOMAIN: "web.cliniccare.example"
+  TENANT_QUERY_PARAM: "tenant"
+  DEFAULT_TENANT_SLUG: "cliniccare-demo"
+  WEB_HOST: "0.0.0.0"
+  WEB_PORT: "3000"
+  LOG_DIR: "/srv/logs"
+  LOG_LEVEL: "info"
 ---
 apiVersion: apps/v1
 kind: Deployment

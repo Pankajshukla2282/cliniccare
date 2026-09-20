@@ -34,3 +34,10 @@ export const OrgId = createParamDecorator(
     return user.organizationId;
   },
 );
+
+
+export const IDEMPOTENCY_KEY = 'idempotency-required';
+export const RequireIdempotency = () => SetMetadata(IDEMPOTENCY_KEY, true);
+
+export const PURPOSE_KEY = 'purpose-of-use';
+export const PurposeOfUse = (purpose: string) => SetMetadata(PURPOSE_KEY, purpose);

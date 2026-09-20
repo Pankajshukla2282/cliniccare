@@ -26,7 +26,7 @@ npm install
 npm run build
 ```
 
-The API must be running on `http://localhost:3100` when the Next.js server renders
+The API must be running using `API_URL` / `NEXT_PUBLIC_API_URL` when the Next.js server renders
 tenant data.
 
 The web application now communicates with the API instead of importing Prisma

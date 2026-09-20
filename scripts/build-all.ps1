@@ -7,13 +7,14 @@ Write-Host '==============================================' -ForegroundColor Cya
 Write-Host ' ClinicCare Production Build' -ForegroundColor Cyan
 Write-Host '==============================================' -ForegroundColor Cyan
 
+$requiredNode = (Get-Content (Join-Path $RepoRoot '.nvmrc') -Raw).Trim()
 $nodeVersion = node --version
 $npmVersion = npm --version
 Write-Host "Node: $nodeVersion"
 Write-Host "npm : $npmVersion"
 
-if ($nodeVersion -ne 'v24.21.0') {
-    Write-Host '[ERROR] ClinicCare requires Node.js v24.21.0.' -ForegroundColor Red
+if ($nodeVersion -ne "v$requiredNode") {
+    Write-Host "[ERROR] ClinicCare requires Node.js $requiredNode (from .nvmrc)." -ForegroundColor Red
     exit 1
 }
 
@@ -38,8 +39,6 @@ npm run build:api
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host '[6/6] Building Web...' -ForegroundColor Yellow
-# API port is set to 3100; Web runs on 3000
-$env:NEXT_PUBLIC_API_URL = 'http://localhost:3100'
 npm run build:web
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

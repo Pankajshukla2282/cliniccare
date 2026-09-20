@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CurrentUser, OrgId, Permissions, RequestUser } from '../common/decorators';
+import { CurrentUser, OrgId, Permissions, RequestUser, RequireIdempotency } from '../common/decorators';
 import { ClinicalService } from './clinical.service';
 import {
   CreateConsultationDto,
@@ -19,6 +19,7 @@ export class ClinicalController {
   constructor(private readonly clinical: ClinicalService) {}
 
   @Permissions('consultation.manage')
+  @RequireIdempotency()
   @Post('consultations')
   createConsultation(@OrgId() orgId: number, @Body() dto: CreateConsultationDto) {
     return this.clinical.createConsultation(orgId, dto);
@@ -47,6 +48,7 @@ export class ClinicalController {
   }
 
   @Permissions('prescription.manage')
+  @RequireIdempotency()
   @Post('prescriptions')
   createPrescription(@OrgId() orgId: number, @Body() dto: CreatePrescriptionDto) {
     return this.clinical.createPrescription(orgId, dto);
@@ -64,8 +66,8 @@ export class ClinicalController {
 
   @Permissions('medical_record.manage')
   @Post('medical-records')
-  createMedicalRecord(@OrgId() orgId: number, @Body() dto: CreateMedicalRecordDto) {
-    return this.clinical.createMedicalRecord(orgId, dto);
+  createMedicalRecord(@OrgId() orgId: number, @Body() dto: CreateMedicalRecordDto, @CurrentUser() user: RequestUser) {
+    return this.clinical.createMedicalRecord(orgId, dto, user.sub);
   }
 
   @Permissions('medical_record.read')

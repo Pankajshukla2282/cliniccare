@@ -1,13 +1,9 @@
 /** @type {import('next').NextConfig} */
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3100';
 
 const nextConfig = {
   output: 'standalone',
   poweredByHeader: false,
 
-  env: {
-    NEXT_PUBLIC_API_URL: apiUrl,
-  },
 
   // Prisma is owned by the NestJS API. The web app must not bundle or
   // execute the API's generated Prisma client.

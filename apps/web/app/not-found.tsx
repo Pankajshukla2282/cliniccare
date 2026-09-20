@@ -1,0 +1,1 @@
+export default function NotFound(){return <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center p-6"><section className="rounded-2xl border p-6"><h1 className="text-xl font-semibold">Not found</h1><p className="mt-2 text-sm text-slate-600">The requested ClinicCare resource was not found.</p></section></main>}

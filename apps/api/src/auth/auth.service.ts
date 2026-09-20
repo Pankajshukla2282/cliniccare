@@ -10,9 +10,10 @@ import { createHash, randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto, RegisterDto, TenantSignupDto } from './dto';
+import { apiConfig } from '../config';
 
-const REFRESH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const BCRYPT_ROUNDS = Math.max(10, Number(process.env.BCRYPT_SALT_ROUNDS ?? 12));
+const REFRESH_TTL_MS = apiConfig.refreshTtlDays * 24 * 60 * 60 * 1000;
+const BCRYPT_ROUNDS = apiConfig.bcryptSaltRounds;
 const TENANT_TRIAL_DAYS = 14;
 const DEFAULT_TENANT_PLAN = 'STARTER';
 const DEFAULT_TENANT_LIMITS = { maxClinics: 1, maxDoctors: 5, maxPatients: 1000 };

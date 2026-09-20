@@ -122,6 +122,22 @@ enum RefreshTokenType {
   PASSWORD_RESET
 }
 
+enum QueueTicketStatus {
+  WAITING
+  CALLED
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+enum LabReportStatus {
+  ORDERED
+  IN_PROGRESS
+  FINAL
+  AMENDED
+  CANCELLED
+}
+
 enum NotificationStatus {
   PENDING
   SENT
@@ -170,6 +186,10 @@ model Organization {
   cmsPages              CmsPage[]
   notificationTemplates NotificationTemplate[]
   rolePermissions       RolePermission[]
+  idempotencyKeys       IdempotencyKey[]
+  medicines             Medicine[]
+  labReports            LabReport[]
+  queueTickets          QueueTicket[]
 
   @@map("organizations")
 }
@@ -199,6 +219,7 @@ model Clinic {
   appointments Appointment[]
   consultations Consultation[]
   treatmentPlans TreatmentPlan[]
+  queueTickets QueueTicket[]
 
   @@index([organizationId])
   @@map("clinics")
@@ -227,6 +248,7 @@ model User {
   refreshTokens RefreshToken[]
   notifications Notification[]
   auditLogs     AuditLog[]
+  idempotencyKeys IdempotencyKey[]
 
   @@index([organizationId])
   @@index([clinicId])
@@ -310,6 +332,7 @@ model Doctor {
   treatmentPlans TreatmentPlan[]
   invoices      Invoice[]
   recommendations DoctorRecommendation[]
+  labReports     LabReport[]
 
   @@index([clinicId])
   @@map("doctors")
@@ -456,6 +479,7 @@ model Appointment {
   consultations Consultation[]
   payments    Payment[]
   statusHistory AppointmentStatusHistory[]
+  queueTickets QueueTicket[]
 
   @@index([doctorId, appointmentDate])
   @@index([patientId, appointmentDate])
@@ -512,6 +536,8 @@ model Patient {
   invoices          Invoice[]
   skinAssessments   SkinAssessment[]
   beforeAfterImages BeforeAfterImage[]
+  queueTickets      QueueTicket[]
+  labReports        LabReport[]
   packagePurchases  PackagePurchase[]
   recommendations   DoctorRecommendation[]
   cart              Cart?
@@ -559,6 +585,7 @@ model Consultation {
   followUps    FollowUp[]
   teleconsultation Teleconsultation?
   recommendations DoctorRecommendation[]
+  labReports LabReport[]
 
   @@index([patientId])
   @@index([doctorId])
@@ -591,6 +618,7 @@ model PrescriptionItem {
   id             Int      @id @default(autoincrement())
   prescriptionId Int
   productId      Int?
+  medicineId     Int?
   name           String
   dosage         String?
   frequency      String?
@@ -602,6 +630,7 @@ model PrescriptionItem {
 
   prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
   product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  medicine     Medicine?    @relation(fields: [medicineId], references: [id], onDelete: SetNull)
 
   @@index([prescriptionId])
   @@map("prescription_items")
@@ -1122,6 +1151,7 @@ model MedicalRecord {
   type       String
   title      String
   details    Json?
+  contentHash String?
   recordedAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
@@ -1319,6 +1349,104 @@ model PrescriptionTemplate {
 
   @@unique([organizationId, name])
   @@map("prescription_templates")
+}
+
+
+// Clinical support: medicines, laboratory reports and patient queue
+model Medicine {
+  id          Int      @id @default(autoincrement())
+  organizationId Int
+  name        String
+  genericName String?
+  strength    String?
+  form        String?
+  manufacturer String?
+  sku         String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  prescriptionItems PrescriptionItem[]
+
+  @@unique([organizationId, name, strength])
+  @@index([organizationId, active])
+  @@map("medicines")
+}
+
+model LabReport {
+  id              Int              @id @default(autoincrement())
+  organizationId  Int
+  patientId       Int
+  consultationId  Int?
+  doctorId        Int?
+  testName        String
+  labName         String?
+  result          String?
+  units           String?
+  referenceRange  String?
+  interpretation  String?
+  status          LabReportStatus  @default(ORDERED)
+  performedAt     DateTime?
+  documentPath    String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultation Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  doctor       Doctor?      @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, patientId, performedAt])
+  @@index([consultationId])
+  @@map("lab_reports")
+}
+
+model QueueTicket {
+  id             Int               @id @default(autoincrement())
+  organizationId Int
+  clinicId       Int
+  patientId      Int
+  appointmentId  Int?
+  tokenNumber    Int
+  queueType      String            @default("CONSULTATION")
+  serviceDate    DateTime          @db.Date
+  status         QueueTicketStatus @default(WAITING)
+  calledAt       DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  notes          String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clinic       Clinic       @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment  Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@unique([clinicId, serviceDate, tokenNumber])
+  @@index([organizationId, clinicId, serviceDate, status])
+  @@index([patientId, serviceDate])
+  @@map("queue_tickets")
+}
+
+model IdempotencyKey {
+  id             Int      @id @default(autoincrement())
+  organizationId Int?
+  userId         Int?
+  key            String
+  method         String
+  path           String
+  statusCode     Int?
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, key])
+  @@index([expiresAt])
+  @@map("idempotency_keys")
 }
 
 // ---------------------------------------------------------------------------

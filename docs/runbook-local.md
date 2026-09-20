@@ -15,7 +15,7 @@ pipeline.
 
 ## Prereqs
 
-- Node.js >= 24 (repo uses 24.x, Node 24 works with the built distribution: start the API with `node dist/main.js` and the web with `next build && next start`; Node 18 LTS is still the recommended version for the `tsx`/SWC dev scripts as specified in `package.json` engines), npm workspaces monorepo
+- Node.js >= 18 (repo uses 24.x), npm workspaces monorepo
 - Kubernetes running (docker-desktop) + `kubectl` against it
 - Root `.env` populated (copy `.env.example` → `.env`). This is the single
   source of credentials — Kustomize and Prisma/seed both read it.

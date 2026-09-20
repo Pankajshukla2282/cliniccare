@@ -33,7 +33,7 @@ export class JwtAuthGuard implements CanActivate {
     if (!match) throw new UnauthorizedException('Missing bearer token');
 
     try {
-      req.user = await this.jwt.verifyAsync(match[1], { algorithms: ['HS256'] });
+      req.user = await this.jwt.verifyAsync(match[1], { algorithms: ['HS256'], issuer: 'cliniccare', audience: 'cliniccare-web' });
       return true;
     } catch {
       throw new UnauthorizedException('Invalid or expired token');

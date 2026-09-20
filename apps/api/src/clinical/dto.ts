@@ -1,4 +1,5 @@
-import { IsArray, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsArray, IsDateString, IsEnum, IsInt, IsNumber, IsObject, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ConsultationType } from '../generated/prisma/client';
 
 export class CreateConsultationDto {
@@ -138,6 +139,7 @@ export class CreateMedicalRecordDto {
   title!: string;
 
   @IsOptional()
+  @IsObject()
   details?: Record<string, unknown>;
 }
 
@@ -238,5 +240,8 @@ export class CreatePrescriptionDto {
   instructions?: string;
 
   @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PrescriptionItemDto)
   prescriptionItems?: PrescriptionItemDto[];
 }

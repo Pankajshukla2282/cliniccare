@@ -1,4 +1,5 @@
 import { cache } from 'react';
+import { webConfig } from './config';
 
 export type Tenant = {
   id: number;
@@ -7,7 +8,7 @@ export type Tenant = {
   settings: unknown;
 };
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3100';
+const apiUrl = webConfig.apiUrl;
 
 /**
  * Resolve the current tenant through the NestJS API.
@@ -21,7 +22,7 @@ export const getTenantBySubdomain = cache(async (subdomain: string): Promise<Ten
   if (!slug) return null;
 
   const response = await fetch(
-    `${apiUrl.replace(/\/$/, '')}/api/v1/public/tenant/${encodeURIComponent(slug)}`,
+    `${apiUrl.replace(/\/$/, '')}${webConfig.apiBasePath}/public/tenant/${encodeURIComponent(slug)}`,
     {
       headers: {
         Accept: 'application/json',

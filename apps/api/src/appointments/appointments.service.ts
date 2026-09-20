@@ -128,7 +128,7 @@ export class AppointmentsService {
         data: { appointmentId: appointment.id, toStatus: 'PENDING', changedBy: performedBy, note: 'Booked' },
       });
       return appointment;
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     try {
       await this.audit.log({
         entityType: 'appointment',
@@ -201,7 +201,7 @@ export class AppointmentsService {
         },
       });
       return next;
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     try {
       await this.audit.log({
         entityType: 'appointment',
@@ -232,7 +232,7 @@ export class AppointmentsService {
         },
       });
       return next;
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     try {
       await this.audit.log({
         entityType: 'appointment',
@@ -320,7 +320,7 @@ export class AppointmentsService {
         },
       });
       return next;
-    });
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     try {
       await this.audit.log({
         entityType: 'appointment',

@@ -39,3 +39,7 @@ coverage/
 # Runtime logs (centralized under repository-root logs/)
 logs/*.log
 logs/*.jsonl
+!.env.example
+**/logs/
+playwright-report/
+test-results/

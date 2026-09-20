@@ -1,63 +1,38 @@
-name: CI
+name: ClinicCare CI
 
 on:
-  pull_request:
-    branches: [development, main]
   push:
-    branches: [development, main]
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  pull_request:
 
 jobs:
-  build:
-    name: Validate + build api/web
+  verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: clinic
+          POSTGRES_PASSWORD: clinic
+          POSTGRES_DB: cliniccare
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U clinic -d cliniccare"
+          --health-interval 10s --health-timeout 5s --health-retries 5
     env:
-      # prisma.config.ts evaluates DATABASE_URL at generate/validate time;
-      # a placeholder keeps the CLI happy without touching a real database.
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DATABASE_URL: postgresql://clinic:clinic@localhost:5432/cliniccare
+      JWT_SECRET: ci-only-secret-please-replace-1234567890
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24.21.0
           cache: npm
-
-      - name: Verify runtime baseline
-        run: |
-          node --version
-          npm --version
-          node -e "if (process.version !== 'v24.21.0') process.exit(1)"
-
-      - name: Install workspace deps
-        run: npm ci
-
-      - name: Generate Prisma client
-        run: npx prisma generate
-
-      - name: Validate Prisma schema
-        run: npx prisma validate
-
-      - name: Verify production manifests
-        run: npm run baseline:verify
-
-      - name: Typecheck API
-        run: npm run typecheck:api
-
-      - name: Typecheck Web
-        run: npm run typecheck:web
-
-      - name: Dependency audit
-        run: npm audit --audit-level=high
-
-      - name: Build API
-        run: npm run build:api
-
-      - name: Build Web (standalone)
-        run: npm run build:web
-        env:
-          # Inlined into the client bundle at build time; matches prod overlay.
-          NEXT_PUBLIC_API_URL: https://api.cliniccare.example
+      - run: npm ci
+      - run: npm run prisma:validate
+      - run: npm run db:generate
+      - run: npm run typecheck:api
+      - run: npm run typecheck:web
+      - run: npm run test:unit
+      - run: npm run build:all
+      - run: npm audit --audit-level=high

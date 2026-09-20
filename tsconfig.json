@@ -1,12 +1,13 @@
 {
   "compilerOptions": {
+    "target": "esnext",
     "module": "commonjs",
-    "moduleResolution": "node",
-    "target": "ES2022",
+    "strict": true,
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "skipLibCheck": true
-  }
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["**/*"]
 }

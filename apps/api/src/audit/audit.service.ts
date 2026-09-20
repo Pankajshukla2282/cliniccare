@@ -24,6 +24,7 @@ export class AuditService {
       });
       organizationId = actor?.organizationId ?? undefined;
     }
+    // Audit logs are append-only by application contract. Do not expose update/delete operations.
     return this.prisma.auditLog.create({
       data: {
         entityType: entry.entityType,

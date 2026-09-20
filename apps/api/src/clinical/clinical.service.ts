@@ -2,6 +2,8 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma } from '../generated/prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { createHash } from 'node:crypto';
 import {
   CreateConsultationDto,
   CreateMedicalRecordDto,
@@ -14,7 +16,7 @@ import {
 
 @Injectable()
 export class ClinicalService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService, private readonly audit: AuditService) {}
 
   private async assertPatientInOrg(patientId: number, organizationId: number) {
     const patient = await this.prisma.patient.findUnique({
@@ -157,15 +159,14 @@ export class ClinicalService {
     });
   }
 
-  async createMedicalRecord(organizationId: number, dto: CreateMedicalRecordDto) {
+  async createMedicalRecord(organizationId: number, dto: CreateMedicalRecordDto, performedBy?: number) {
     await this.assertPatientInOrg(dto.patientId, organizationId);
     if (dto.doctorId) await this.assertDoctorInOrg(dto.doctorId, organizationId);
-    return this.prisma.medicalRecord.create({
-      data: {
-        ...dto,
-        details: (dto.details ?? undefined) as Prisma.InputJsonValue | undefined,
-      },
-    });
+    const payload = JSON.stringify({ patientId: dto.patientId, doctorId: dto.doctorId ?? null, type: dto.type, title: dto.title, details: dto.details ?? null });
+    const contentHash = createHash('sha256').update(payload).digest('hex');
+    const record = await this.prisma.medicalRecord.create({ data: { ...dto, contentHash, details: (dto.details ?? undefined) as Prisma.InputJsonValue | undefined } });
+    await this.audit.log({ entityType: 'medical_record', entityId: record.id, action: 'CREATE', performedBy, organizationId, changes: { contentHash }, purpose: 'clinical_care' }).catch(() => {});
+    return record;
   }
 
   listMedicalRecords(organizationId: number, patientId: number, type?: string) {
@@ -268,7 +269,7 @@ export class ClinicalService {
     // Video provider abstraction: STUB generates the room; a real provider
     // (Daily.co / Twilio / Jitsi) plugs in here without changing callers.
     const roomId = `room-${randomBytes(8).toString('hex')}`;
-    const base = process.env.TELECONSULT_BASE_URL ?? 'https://meet.cliniccare.local/room';
+    const base = process.env.TELECONSULT_BASE_URL ?? 'https://meet.example.com/room';
     return this.prisma.teleconsultation.create({
       data: { consultationId, provider: 'STUB', roomId, joinUrl: `${base}/${roomId}` },
     });

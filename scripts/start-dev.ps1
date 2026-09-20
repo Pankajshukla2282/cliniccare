@@ -4,183 +4,219 @@ $ErrorActionPreference = "Stop"
 # ClinicCare Windows Development Startup
 # ============================================================
 
-$ScriptDir = Split-Path -Parent ($MyInvocation.MyCommand.Path)
-$RepoRoot = Split-Path -Parent ($ScriptDir)
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$RepoRoot = Split-Path -Parent $ScriptDir
 
-Set-Location -Path ($RepoRoot)
+Set-Location $RepoRoot
 
-# ---------- Log folder & Transcript ----------
-$logDir = Join-Path -Path ($RepoRoot) -ChildPath ("logs")
-if (-not (Test-Path -Path ($logDir))) { New-Item -ItemType ("Directory") -Path ($logDir) | Out-Null }
-$logFile = Join-Path -Path ($logDir) -ChildPath ("startup.log")
+# ---------- Log folder ----------
+$logDir = Join-Path $RepoRoot "logs"
+if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out-Null }
+$logFile = Join-Path $logDir "startup.log"
 
-# Start logging session
-Start-Transcript -Path ($logFile) -Append -ErrorAction ("SilentlyContinue") | Out-Null
+Write-Host ""
+Write-Host "==============================================" -ForegroundColor Cyan
+Write-Host "     ClinicCare Windows Development Start     " -ForegroundColor Cyan
+Write-Host "==============================================" -ForegroundColor Cyan
+Write-Host ""
 
-Write-Host ("")
-Write-Host ("==============================================") -ForegroundColor ("Cyan")
-Write-Host ("     ClinicCare Windows Development Start     ") -ForegroundColor ("Cyan")
-Write-Host ("==============================================") -ForegroundColor ("Cyan")
-Write-Host ("")
-
-Write-Host ("[INFO] Repo root: $RepoRoot")
-Write-Host ("")
-
-# Global process tracks for clean shutdown
-$script:PostgresProcess =$null
-$script:RedisProcess    =$null
-$script:ApiProcess      =$null
-$script:WebProcess      =$null
-
-# Function to safely kill spawned background processes
-function Stop-SpawnedProcesses {
-    Write-Host ("")
-    Write-Host ("[STOP] Cleaning up processes...") -ForegroundColor ("Yellow")
-
-    @($script:ApiProcess,$script:WebProcess, $script:PostgresProcess,$script:RedisProcess) | ForEach-Object {
-        if ($_ -and (-not ($_.HasExited))) {
-            try {
-                Stop-Process -Id ($_.Id) -Force -ErrorAction ("SilentlyContinue")
-            } catch {}
-        }
-    }
-
-    Write-Host ("[OK] All background services stopped.") -ForegroundColor ("Green")
-}
-
-# Register Ctrl+C / Exit event handlers
-Register-EngineEvent -SourceIdentifier ("PowerShell.Exiting") -Action { Stop-SpawnedProcesses } | Out-Null
+Write-Host "[INFO] Repo root: $RepoRoot"
+Write-Host ""
 
 # ============================================================
 # 1. Load .env
 # ============================================================
 
-$EnvFile = Join-Path -Path ($RepoRoot) -ChildPath (".env")
+$EnvFile = Join-Path $RepoRoot ".env"
 
-if (Test-Path -Path ($EnvFile)) {
-    Write-Host ("[INFO] Loading .env...")
+if (Test-Path $EnvFile) {
+    Write-Host "[INFO] Loading .env..."
 
-    Get-Content -Path ($EnvFile) | ForEach-Object {
-        $line = ($_.Trim())
+    Get-Content $EnvFile | ForEach-Object {
+        $line = $_.Trim()
 
-        if ($line -and (-not ($line.StartsWith("#"))) -and ($line.Contains("="))) {
-            $parts = ($line.Split("=", 2))
-            $name  = ($parts[0].Trim())
-            $value = ($parts[1].Trim().Trim('"').Trim("'"))
+        if (
+            $line -and
+            -not $line.StartsWith("#") -and
+            $line.Contains("=")
+        ) {
+            $parts = $line.Split("=", 2)
 
-            [Environment]::SetEnvironmentVariable($name,$value, "Process")
+            $name = $parts[0].Trim()
+            $value = $parts[1].Trim()
+
+            # Remove surrounding quotes
+            $value = $value.Trim('"').Trim("'")
+
+            [Environment]::SetEnvironmentVariable(
+                $name,
+                $value,
+                "Process"
+            )
         }
     }
 }
 else {
-    Write-Host ("[WARN] .env file not found") -ForegroundColor ("Yellow")
+    Write-Host "[WARN] .env not found" -ForegroundColor Yellow
 }
 
-if (-not ($env:DATABASE_URL)) {
-    Write-Host ("[ERROR] DATABASE_URL is not configured. Copy .env.example to .env and configure it.") -ForegroundColor ("Red")
-    Stop-Transcript | Out-Null
+if (-not $env:DATABASE_URL) {
+    Write-Host "[ERROR] DATABASE_URL is not configured. Copy .env.example to .env and configure it." -ForegroundColor Red
     exit 1
 }
 
-Write-Host ("[OK] DATABASE_URL configured.") -ForegroundColor ("Green")
-Write-Host ("")
+Write-Host "[OK] DATABASE_URL configured."
+
+# Dynamic local runtime configuration (root .env)
+$ApiHost = if ($env:API_HOST) { $env:API_HOST } else { '127.0.0.1' }
+$ApiPort = if ($env:API_PORT) { [int]$env:API_PORT } else { 3100 }
+$WebHost = if ($env:WEB_HOST) { $env:WEB_HOST } else { '127.0.0.1' }
+$WebPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 3000 }
+$PostgresLocalPort = if ($env:POSTGRES_LOCAL_PORT) { [int]$env:POSTGRES_LOCAL_PORT } else { 5432 }
+$RedisLocalPort = if ($env:REDIS_LOCAL_PORT) { [int]$env:REDIS_LOCAL_PORT } else { 6379 }
+$K8sNamespace = if ($env:K8S_NAMESPACE) { $env:K8S_NAMESPACE } else { 'cliniccare' }
+$PostgresService = if ($env:POSTGRES_SERVICE) { $env:POSTGRES_SERVICE } else { 'postgres' }
+$RedisService = if ($env:REDIS_SERVICE) { $env:REDIS_SERVICE } else { 'redis' }
+$ApiHealthPath = if ($env:API_HEALTH_PATH) { $env:API_HEALTH_PATH } else { '/healthz' }
+$WebHealthPath = if ($env:WEB_HEALTH_PATH) { $env:WEB_HEALTH_PATH } else { '/healthz' }
+$ApiUrl = if ($env:API_URL) { $env:API_URL } else { "http://localhost:$ApiPort" }
+
+Write-Host "[CONFIG] API   : $ApiHost`:$ApiPort"
+Write-Host "[CONFIG] Web   : $WebHost`:$WebPort"
+Write-Host "[CONFIG] DB    : localhost`:$PostgresLocalPort"
+Write-Host "[CONFIG] Redis : localhost`:$RedisLocalPort"
+Write-Host "[CONFIG] K8s   : $K8sNamespace"
+Write-Host ""
 
 # ============================================================
 # 2. Check required commands
 # ============================================================
 
-Write-Host ("[CHECK] Checking required commands...")
+Write-Host "[CHECK] Checking required commands..."
 
-$Commands = @("kubectl", "curl.exe", "node.exe", "npm.cmd")
+$Commands = @(
+    "kubectl",
+    "curl.exe",
+    "node.exe",
+    "npm.cmd"
+)
 
 foreach ($Command in $Commands) {
-    if (Get-Command -Name ($Command) -ErrorAction ("SilentlyContinue")) {
-        Write-Host ("  [OK] $Command") -ForegroundColor ("Green")
+    $Found = Get-Command $Command -ErrorAction SilentlyContinue
+
+    if ($Found) {
+        Write-Host "  [OK] $Command" -ForegroundColor Green
     }
     else {
-        Write-Host ("  [ERROR] $Command NOT FOUND") -ForegroundColor ("Red")
-        Stop-Transcript | Out-Null
+        Write-Host "  [ERROR] $Command NOT FOUND" -ForegroundColor Red
         exit 1
     }
 }
 
-Write-Host ("")
+Write-Host ""
 
 # ============================================================
-# 3. Kubernetes Connection
+# 3. Kubernetes
 # ============================================================
 
-Write-Host ("[CHECK] Checking Kubernetes...")
+Write-Host "[CHECK] Checking Kubernetes..."
 
-kubectl version --client *> $null
+kubectl version --client
+
 if ($LASTEXITCODE -ne 0) {
-    Write-Host ("[ERROR] kubectl execution failed.") -ForegroundColor ("Red")
-    Stop-Transcript | Out-Null
+    Write-Host "[ERROR] kubectl is not working." -ForegroundColor Red
     exit 1
 }
 
-kubectl cluster-info *> $null
+kubectl cluster-info
+
 if ($LASTEXITCODE -ne 0) {
-    Write-Host ("[ERROR] Cannot connect to Kubernetes cluster.") -ForegroundColor ("Red")
-    Write-Host ("Make sure Docker Desktop / Kubernetes cluster is running.") -ForegroundColor ("Yellow")
-    Stop-Transcript | Out-Null
+    Write-Host "[ERROR] Cannot connect to Kubernetes." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "Make sure Docker Desktop Kubernetes is running."
     exit 1
 }
 
-Write-Host ("[OK] Kubernetes cluster reachable.") -ForegroundColor ("Green")
-Write-Host ("")
+Write-Host "[OK] Kubernetes cluster reachable." -ForegroundColor Green
+Write-Host ""
 
 # ============================================================
 # 4. Namespace
 # ============================================================
 
-Write-Host ("[CHECK] Checking cliniccare namespace...")
+Write-Host "[CHECK] Checking cliniccare namespace..."
 
-kubectl get namespace cliniccare *> $null
+kubectl get namespace $K8sNamespace *> $null
+
 if ($LASTEXITCODE -ne 0) {
-    Write-Host ("[ERROR] Namespace 'cliniccare' does not exist.") -ForegroundColor ("Red")
+    Write-Host "[ERROR] Namespace '$K8sNamespace' does not exist." -ForegroundColor Red
     kubectl get namespaces
-    Stop-Transcript | Out-Null
     exit 1
 }
 
-Write-Host ("[OK] Namespace cliniccare exists.") -ForegroundColor ("Green")
-Write-Host ("")
+Write-Host "[OK] Namespace $K8sNamespace exists." -ForegroundColor Green
+Write-Host ""
 
 # ============================================================
-# 5. Services Check
+# 5. Services
 # ============================================================
 
-Write-Host ("[CHECK] Checking Kubernetes services...")
+Write-Host "[CHECK] Checking Kubernetes services..."
 
-foreach ($svc in @("postgres", "redis")) {
-    kubectl get svc $svc -n cliniccare *>$null
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host ("[ERROR] Service '$svc' does not exist in namespace cliniccare.") -ForegroundColor ("Red")
-        kubectl get svc -n cliniccare
-        Stop-Transcript | Out-Null
-        exit 1
-    }
-    Write-Host ("  [OK] $svc service exists.") -ForegroundColor ("Green")
+kubectl get svc $PostgresService -n $K8sNamespace *> $null
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Service '$PostgresService' does not exist." -ForegroundColor Red
+    kubectl get svc -n $K8sNamespace
+    exit 1
 }
 
-Write-Host ("")
+kubectl get svc $RedisService -n $K8sNamespace *> $null
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[ERROR] Service '$RedisService' does not exist." -ForegroundColor Red
+    kubectl get svc -n $K8sNamespace
+    exit 1
+}
+
+Write-Host "[OK] $PostgresService service exists." -ForegroundColor Green
+Write-Host "[OK] $RedisService service exists." -ForegroundColor Green
+Write-Host ""
 
 # ============================================================
-# 6. Helper: Test TCP Port
+# 6. Pods
+# ============================================================
+
+Write-Host "[INFO] Kubernetes pods:"
+kubectl get pods -n $K8sNamespace -o wide
+Write-Host ""
+
+# ============================================================
+# 7. Helper: Test TCP port
 # ============================================================
 
 function Test-Port {
-    param([int]$Port)
+    param(
+        [int]$Port
+    )
 
     try {
         $Connection = New-Object System.Net.Sockets.TcpClient
-        $AsyncResult = $Connection.BeginConnect("127.0.0.1", $Port, $null,$null)
-        $Success =$AsyncResult.AsyncWaitHandle.WaitOne(1000)
 
-        if ($Success -and ($Connection.Connected)) {$Connection.Close()
+        $AsyncResult = $Connection.BeginConnect(
+            "127.0.0.1",
+            $Port,
+            $null,
+            $null
+        )
+
+        $Success = $AsyncResult.AsyncWaitHandle.WaitOne(1000)
+
+        if ($Success -and $Connection.Connected) {
+            $Connection.Close()
             return $true
         }
+
         $Connection.Close()
         return $false
     }
@@ -190,272 +226,411 @@ function Test-Port {
 }
 
 # ============================================================
-# 7. PostgreSQL Port-Forward (5432)
+# 8. Start PostgreSQL port-forward
 # ============================================================
 
-Write-Host ("[INFO] PostgreSQL (localhost:5432)")
+$PostgresProcess = $null
 
-if (Test-Port -Port (5432)) {
-    Write-Host ("[OK] localhost:5432 already open.") -ForegroundColor ("Green")
+Write-Host "[INFO] PostgreSQL localhost:$PostgresLocalPort"
+
+if (Test-Port $PostgresLocalPort) {
+    Write-Host "[OK] localhost:$PostgresLocalPort already open." -ForegroundColor Green
 }
 else {
-    Write-Host ("[START] Starting PostgreSQL port-forward...")
+    Write-Host "[START] Starting PostgreSQL port-forward..."
 
-    $script:PostgresProcess = Start-Process `
-        -FilePath ("kubectl.exe") `
-        -ArgumentList @("port-forward", "-n", "cliniccare", "svc/postgres", "5432:5432") `
-        -RedirectStandardOutput ("$logDir\postgres-port-forward.log") `
-        -RedirectStandardError ("$logDir\postgres-port-forward-error.log") `
+    $PostgresProcess = Start-Process `
+        -FilePath "kubectl.exe" `
+        -ArgumentList @(
+            "port-forward",
+            "-n",
+            "$K8sNamespace",
+            "svc/$PostgresService",
+            "$PostgresLocalPort`:5432"
+        ) `
+        -RedirectStandardOutput "$logDir\postgres-port-forward.log" `
+        -RedirectStandardError "$logDir\postgres-port-forward-error.log" `
         -PassThru `
-        -WindowStyle ("Hidden")
+        -WindowStyle Hidden
 
-    Write-Host ("   kubectl PID: $($script:PostgresProcess.Id)")
+    Write-Host "   kubectl PID: $($PostgresProcess.Id)"
 
-    $PostgresReady =$false
+    $PostgresReady = $false
+
     for ($i = 1; $i -le 30; $i++) {
-        Start-Sleep -Seconds (1)
 
-        if ($script:PostgresProcess.HasExited) {
-            Write-Host ("[ERROR] PostgreSQL port-forward process exited unexpectedly.") -ForegroundColor ("Red")
-            if (Test-Path -Path ("$logDir\postgres-port-forward-error.log")) {
-                Get-Content -Path ("$logDir\postgres-port-forward-error.log")
+        Start-Sleep -Seconds 1
+
+        if ($PostgresProcess.HasExited) {
+            Write-Host "[ERROR] PostgreSQL port-forward exited." -ForegroundColor Red
+
+            Write-Host ""
+            Write-Host "----- PostgreSQL kubectl error -----" -ForegroundColor Yellow
+
+            if (Test-Path "$logDir\postgres-port-forward-error.log") {
+                Get-Content "$logDir\postgres-port-forward-error.log"
             }
-            Stop-SpawnedProcesses
-            Stop-Transcript | Out-Null
+
+            Write-Host "------------------------------------"
             exit 1
         }
 
-        if (Test-Port -Port (5432)) {
-            Write-Host ("[OK] PostgreSQL available on localhost:5432") -ForegroundColor ("Green")
-            $PostgresReady =$true
+        if (Test-Port $PostgresLocalPort) {
+            Write-Host "[OK] PostgreSQL available on localhost:$PostgresLocalPort" -ForegroundColor Green
+            $PostgresReady = $true
             break
         }
     }
 
-    if (-not ($PostgresReady)) {
-        Write-Host ("[ERROR] PostgreSQL did not become available within 30 seconds.") -ForegroundColor ("Red")
-        Stop-SpawnedProcesses
-        Stop-Transcript | Out-Null
+    if (-not $PostgresReady) {
+        Write-Host "[ERROR] PostgreSQL did not become available after 30 seconds." -ForegroundColor Red
+
+        Write-Host ""
+        Write-Host "----- PostgreSQL kubectl output -----" -ForegroundColor Yellow
+
+        if (Test-Path "$logDir\postgres-port-forward.log") {
+            Get-Content "$logDir\postgres-port-forward.log"
+        }
+
+        if (Test-Path "$logDir\postgres-port-forward-error.log") {
+            Get-Content "$logDir\postgres-port-forward-error.log"
+        }
+
+        Write-Host "-------------------------------------"
+
         exit 1
     }
 }
 
 # ============================================================
-# 8. Redis Port-Forward (6379)
+# 9. Start Redis port-forward
 # ============================================================
 
-Write-Host ("")
-Write-Host ("[INFO] Redis (localhost:6379)")
+$RedisProcess = $null
 
-if (Test-Port -Port (6379)) {
-    Write-Host ("[OK] localhost:6379 already open.") -ForegroundColor ("Green")
+Write-Host ""
+Write-Host "[INFO] Redis localhost:$RedisLocalPort"
+
+if (Test-Port $RedisLocalPort) {
+    Write-Host "[OK] localhost:$RedisLocalPort already open." -ForegroundColor Green
 }
 else {
-    Write-Host ("[START] Starting Redis port-forward...")
+    Write-Host "[START] Starting Redis port-forward..."
 
-    $script:RedisProcess = Start-Process `
-        -FilePath ("kubectl.exe") `
-        -ArgumentList @("port-forward", "-n", "cliniccare", "svc/redis", "6379:6379") `
-        -RedirectStandardOutput ("$logDir\redis-port-forward.log") `
-        -RedirectStandardError ("$logDir\redis-port-forward-error.log") `
+    $RedisProcess = Start-Process `
+        -FilePath "kubectl.exe" `
+        -ArgumentList @(
+            "port-forward",
+            "-n",
+            "$K8sNamespace",
+            "svc/$RedisService",
+            "$RedisLocalPort`:6379"
+        ) `
+        -RedirectStandardOutput "$logDir\redis-port-forward.log" `
+        -RedirectStandardError "$logDir\redis-port-forward-error.log" `
         -PassThru `
-        -WindowStyle ("Hidden")
+        -WindowStyle Hidden
 
-    Write-Host ("   kubectl PID: $($script:RedisProcess.Id)")
+    Write-Host "   kubectl PID: $($RedisProcess.Id)"
 
-    $RedisReady =$false
+    $RedisReady = $false
+
     for ($i = 1; $i -le 30; $i++) {
-        Start-Sleep -Seconds (1)
 
-        if ($script:RedisProcess.HasExited) {
-            Write-Host ("[ERROR] Redis port-forward process exited unexpectedly.") -ForegroundColor ("Red")
-            if (Test-Path -Path ("$logDir\redis-port-forward-error.log")) {
-                Get-Content -Path ("$logDir\redis-port-forward-error.log")
+        Start-Sleep -Seconds 1
+
+        if ($RedisProcess.HasExited) {
+            Write-Host "[ERROR] Redis port-forward exited." -ForegroundColor Red
+
+            Write-Host ""
+            Write-Host "----- Redis kubectl error -----" -ForegroundColor Yellow
+
+            if (Test-Path "$logDir\redis-port-forward-error.log") {
+                Get-Content "$logDir\redis-port-forward-error.log"
             }
-            Stop-SpawnedProcesses
-            Stop-Transcript | Out-Null
+
+            Write-Host "-------------------------------"
             exit 1
         }
 
-        if (Test-Port -Port (6379)) {
-            Write-Host ("[OK] Redis available on localhost:6379") -ForegroundColor ("Green")
-            $RedisReady =$true
+        if (Test-Port $RedisLocalPort) {
+            Write-Host "[OK] Redis available on localhost:$RedisLocalPort" -ForegroundColor Green
+            $RedisReady = $true
             break
         }
     }
 
-    if (-not ($RedisReady)) {
-        Write-Host ("[ERROR] Redis did not become available within 30 seconds.") -ForegroundColor ("Red")
-        Stop-SpawnedProcesses
-        Stop-Transcript | Out-Null
+    if (-not $RedisReady) {
+        Write-Host "[ERROR] Redis did not become available after 30 seconds." -ForegroundColor Red
         exit 1
     }
 }
 
 # ============================================================
-# 9. Start API App (Port 3100)
+# 10. Start API
 # ============================================================
 
-Write-Host ("")
-Write-Host ("[CHECK] Checking NestJS API (Port 3100)...")
+$ApiProcess = $null
 
-$ApiPort = 3100
+Write-Host ""
+Write-Host "[CHECK] Checking API..."
 
-if (Test-Port -Port ($ApiPort)) {
-    Write-Host ("[OK] API already listening on port $ApiPort.") -ForegroundColor ("Green")
+if (Test-Port $ApiPort) {
+    Write-Host "[OK] API already listening on port $ApiPort." -ForegroundColor Green
 }
 else {
-    Write-Host ("[START] Starting NestJS API...")
 
-    $DistMain = Join-Path -Path ($RepoRoot) -ChildPath ("apps\api\dist\main.js")
+    Write-Host "[START] Starting NestJS API..."
 
-    if (-not (Test-Path -Path ($DistMain))) {
-        Write-Host ("[ERROR] API build file missing: $DistMain") -ForegroundColor ("Red")
-        Write-Host ("Run 'npm run build' first to build the workspace.") -ForegroundColor ("Yellow")
-        Stop-SpawnedProcesses
-        Stop-Transcript | Out-Null
+    $DistMain = Join-Path $RepoRoot "apps\api\dist\main.js"
+
+    if (-not (Test-Path $DistMain)) {
+        Write-Host "[ERROR] $DistMain does not exist." -ForegroundColor Red
+        Write-Host ""
+        Write-Host "Build the API first:"
+        Write-Host "  npm run build"
         exit 1
     }
 
-    $env:NODE_ENV = "production"
+    $env:NODE_ENV = if ($env:NODE_ENV) { $env:NODE_ENV } else { "development" }
 
-    $script:ApiProcess = Start-Process `
-        -FilePath ("node.exe") `
-        -ArgumentList @($DistMain) `
-        -RedirectStandardOutput ("$logDir\api.log") `
-        -RedirectStandardError ("$logDir\api-error.log") `
+    $ApiProcess = Start-Process `
+        -FilePath "node.exe" `
+        -ArgumentList @(
+            $DistMain
+        ) `
+        -RedirectStandardOutput "$logDir\api.log" `
+        -RedirectStandardError "$logDir\api-error.log" `
         -PassThru `
-        -WindowStyle ("Hidden")
+        -WindowStyle Hidden
 
-    Write-Host ("   API PID: $($script:ApiProcess.Id)")
-    Write-Host ("[WAIT] Waiting for API health check on localhost:$ApiPort...")
+    Write-Host "   API PID: $($ApiProcess.Id)"
+    Write-Host "[WAIT] Waiting for API on localhost:$ApiPort..."
 
-    $ApiReady =$false
+    $ApiReady = $false
+
     for ($i = 1; $i -le 30; $i++) {
-        Start-Sleep -Seconds (1)
 
-        if (Test-Port -Port ($ApiPort)) {
+        Start-Sleep -Seconds 1
+
+        if (Test-Port $ApiPort) {
             try {
-                $Response = Invoke-WebRequest -Uri ("http://localhost:$ApiPort/healthz") -UseBasicParsing -TimeoutSec (3) -ErrorAction ("Stop")
+                $Response = Invoke-WebRequest `
+                    -Uri "$ApiUrl$ApiHealthPath" `
+                    -UseBasicParsing `
+                    -TimeoutSec 3 `
+                    -ErrorAction Stop
+
                 if ($Response.StatusCode -eq 200) {
-                    Write-Host ("[OK] API health check passed.") -ForegroundColor ("Green")
-                    $ApiReady =$true
+                    Write-Host "[OK] API healthcheck passed." -ForegroundColor Green
+                    $ApiReady = $true
                     break
                 }
             }
-            catch {}
+            catch {
+                # API may be starting.
+            }
         }
 
-        if ($script:ApiProcess.HasExited) {
-            Write-Host ("[ERROR] API process exited unexpectedly.") -ForegroundColor ("Red")
-            if (Test-Path -Path ("$logDir\api-error.log")) { Get-Content -Path ("$logDir\api-error.log") }
-            Stop-SpawnedProcesses
-            Stop-Transcript | Out-Null
+        if ($ApiProcess.HasExited) {
+            Write-Host "[ERROR] API process exited." -ForegroundColor Red
+
+            Write-Host ""
+            Write-Host "================ API LOG ================"
+
+            if (Test-Path "$logDir\api.log") {
+                Get-Content "$logDir\api.log"
+            }
+
+            if (Test-Path "$logDir\api-error.log") {
+                Get-Content "$logDir\api-error.log"
+            }
+
+            Write-Host "=========================================="
+
             exit 1
         }
     }
 
-    if (-not ($ApiReady)) {
-        Write-Host ("[ERROR] API did not become healthy within 30 seconds.") -ForegroundColor ("Red")
-        Stop-SpawnedProcesses
-        Stop-Transcript | Out-Null
+    if (-not $ApiReady) {
+        Write-Host "[ERROR] API did not become healthy within 30 seconds." -ForegroundColor Red
+
+        Write-Host ""
+        Write-Host "================ API LOG ================"
+
+        if (Test-Path "$logDir\api.log") {
+            Get-Content "$logDir\api.log"
+        }
+
+        if (Test-Path "$logDir\api-error.log") {
+            Get-Content "$logDir\api-error.log"
+        }
+
+        Write-Host "=========================================="
+
         exit 1
     }
 }
 
 # ============================================================
-# 10. Start Web App (Port 3000)
+# 11. Start Web
 # ============================================================
 
-Write-Host ("")
-Write-Host ("[CHECK] Checking Next.js Web (Port 3000)...")
+$WebProcess = $null
 
-$WebPort = 3000
+Write-Host ""
+Write-Host "[CHECK] Checking Web..."
 
-if (Test-Port -Port ($WebPort)) {
-    Write-Host ("[OK] Web already listening on port $WebPort.") -ForegroundColor ("Green")
+if (Test-Port $WebPort) {
+    Write-Host "[OK] Web already listening on port $WebPort." -ForegroundColor Green
 }
 else {
-    Write-Host ("[START] Starting Next.js Web on port $WebPort...")
 
-    $env:PORT =$WebPort
+    Write-Host "[START] Starting Next.js Web..."
 
-    $script:WebProcess = Start-Process `
-        -FilePath ("npm.cmd") `
-        -ArgumentList @("run", "dev", "--workspace=apps/web") `
-        -RedirectStandardOutput ("$logDir\web.log") `
-        -RedirectStandardError ("$logDir\web-error.log") `
+    $env:PORT = "$WebPort"
+
+    $WebProcess = Start-Process `
+        -FilePath "npm.cmd" `
+        -ArgumentList @(
+            "run",
+            "dev",
+            "--workspace=apps/web",
+            "--",
+            "--hostname",
+            $WebHost,
+            "--port",
+            "$WebPort",
+            "--include=dev"
+        ) `
+        -RedirectStandardOutput "$logDir\web.log" `
+        -RedirectStandardError "$logDir\web-error.log" `
         -PassThru `
-        -WindowStyle ("Hidden")
+        -WindowStyle Hidden
 
-    Write-Host ("   Web PID: $($script:WebProcess.Id)")
-    Write-Host ("[WAIT] Waiting for Web on localhost:$WebPort...")
+    Write-Host "   Web PID: $($WebProcess.Id)"
+    Write-Host "[WAIT] Waiting for Web on localhost:$WebPort..."
 
-    $WebReady =$false
+    $WebReady = $false
+
     for ($i = 1; $i -le 45; $i++) {
-        Start-Sleep -Seconds (1)
 
-        if (Test-Port -Port ($WebPort)) {
-            Write-Host ("[OK] Web application is listening on port $WebPort.") -ForegroundColor ("Green")
-            $WebReady =$true
-            break
+        Start-Sleep -Seconds 1
+
+        if (Test-Port $WebPort) {
+            try {
+                $Response = Invoke-WebRequest `
+                    -Uri "http://localhost:$WebPort$WebHealthPath" `
+                    -UseBasicParsing `
+                    -TimeoutSec 3 `
+                    -ErrorAction Stop
+
+                if ($Response.StatusCode -eq 200) {
+                    Write-Host "[OK] Web healthcheck passed." -ForegroundColor Green
+                    $WebReady = $true
+                    break
+                }
+            }
+            catch {
+                # Web is still starting.
+            }
         }
 
-        if ($script:WebProcess.HasExited) {
-            Write-Host ("[ERROR] Web process exited unexpectedly.") -ForegroundColor ("Red")
-            if (Test-Path -Path ("$logDir\web-error.log")) { Get-Content -Path ("$logDir\web-error.log") }
-            Stop-SpawnedProcesses
-            Stop-Transcript | Out-Null
+        if ($WebProcess.HasExited) {
+            Write-Host "[ERROR] Web process exited." -ForegroundColor Red
+
+            Write-Host ""
+            Write-Host "================ WEB LOG ================"
+
+            if (Test-Path "$logDir\web.log") {
+                Get-Content "$logDir\web.log"
+            }
+
+            if (Test-Path "$logDir\web-error.log") {
+                Get-Content "$logDir\web-error.log"
+            }
+
+            Write-Host "=========================================="
+
             exit 1
         }
     }
 
-    if (-not ($WebReady)) {
-        Write-Host ("[WARN] Web app did not respond within 45 seconds. Check logs: $logDir\web.log") -ForegroundColor ("Yellow")
+    if (-not $WebReady) {
+        Write-Host "[WARN] Web did not become healthy within 45 seconds." -ForegroundColor Yellow
+
+        if (Test-Path "$logDir\web.log") {
+            Get-Content "$logDir\web.log" -Tail 100
+        }
     }
 }
 
 # ============================================================
-# 11. Success Summary
+# 12. Success
 # ============================================================
 
-Write-Host ("")
-Write-Host ("==============================================") -ForegroundColor ("Green")
-Write-Host ("   ClinicCare local environment is running    ") -ForegroundColor ("Green")
-Write-Host ("==============================================") -ForegroundColor ("Green")
-Write-Host ("")
-Write-Host ("PostgreSQL : localhost:5432")
-Write-Host ("Redis      : localhost:6379")
-Write-Host ("API        : http://localhost:3100")
-Write-Host ("Web        : http://localhost:3000")
-Write-Host ("Swagger    : http://localhost:3100/docs")
-Write-Host ("")
-Write-Host ("Press Ctrl+C to stop the local environment.")
-Write-Host ("")
+Write-Host ""
+Write-Host "==============================================" -ForegroundColor Green
+Write-Host "   ClinicCare local environment is running    " -ForegroundColor Green
+Write-Host "==============================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "PostgreSQL : localhost:$PostgresLocalPort"
+Write-Host "Redis      : localhost:$RedisLocalPort"
+Write-Host "API        : $ApiUrl"
+Write-Host "Web        : http://localhost:$WebPort"
+Write-Host "API health : $ApiUrl$ApiHealthPath"
+Write-Host ""
+Write-Host "Press Ctrl+C to stop the local environment."
+Write-Host ""
 
 # ============================================================
-# 12. Keep Alive Loop
+# 13. Keep script alive
 # ============================================================
 
 try {
     while ($true) {
-        Start-Sleep -Seconds (2)
+        Start-Sleep -Seconds 2
 
-        if ($script:PostgresProcess -and ($script:PostgresProcess.HasExited)) {
-            Write-Host ("[WARN] PostgreSQL port-forward stopped.") -ForegroundColor ("Yellow")
+        # Detect unexpectedly terminated processes
+        if ($PostgresProcess -and $PostgresProcess.HasExited) {
+            Write-Host "[WARN] PostgreSQL port-forward stopped." -ForegroundColor Yellow
         }
-        if ($script:RedisProcess -and ($script:RedisProcess.HasExited)) {
-            Write-Host ("[WARN] Redis port-forward stopped.") -ForegroundColor ("Yellow")
+
+        if ($RedisProcess -and $RedisProcess.HasExited) {
+            Write-Host "[WARN] Redis port-forward stopped." -ForegroundColor Yellow
         }
-        if ($script:ApiProcess -and ($script:ApiProcess.HasExited)) {
-            Write-Host ("[WARN] API process stopped.") -ForegroundColor ("Yellow")
+
+        if ($ApiProcess -and $ApiProcess.HasExited) {
+            Write-Host "[WARN] API process stopped." -ForegroundColor Yellow
         }
-        if ($script:WebProcess -and ($script:WebProcess.HasExited)) {
-            Write-Host ("[WARN] Web process stopped.") -ForegroundColor ("Yellow")
+
+        if ($WebProcess -and $WebProcess.HasExited) {
+            Write-Host "[WARN] Web process stopped." -ForegroundColor Yellow
         }
     }
 }
 finally {
-    Stop-SpawnedProcesses
-    Stop-Transcript | Out-Null
+
+    Write-Host ""
+    Write-Host "[STOP] Stopping ClinicCare..."
+
+    if ($ApiProcess -and -not $ApiProcess.HasExited) {
+        Stop-Process -Id $ApiProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($WebProcess -and -not $WebProcess.HasExited) {
+        Stop-Process -Id $WebProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($PostgresProcess -and -not $PostgresProcess.HasExited) {
+        Stop-Process -Id $PostgresProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($RedisProcess -and -not $RedisProcess.HasExited) {
+        Stop-Process -Id $RedisProcess.Id -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "[OK] ClinicCare stopped." -ForegroundColor Green
+Write-Host "Log file: $logFile" -ForegroundColor Cyan
+Add-Content -Path $logFile -Value "ClinicCare startup completed at $(Get-Date)"
 }

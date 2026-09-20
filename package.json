@@ -21,16 +21,26 @@
     "lint:web": "eslint \"apps/web/**/*.{ts,tsx,js,mjs}\"",
     "lint": "npm run lint:api && npm run lint:web",
     "security:audit": "npm audit --audit-level=high",
-    "test:security": "npm run typecheck:api && npm run typecheck:web && npm run security:audit",
-    "baseline:verify": "node scripts/verify-production-baseline.mjs"
+    "test:security": "npm run typecheck:api && npm run typecheck:web && npm run test:unit && npm run security:audit",
+    "baseline:verify": "node scripts/verify-production-baseline.mjs",
+    "dev:api": "npm run dev --workspace=@cliniccare/api",
+    "dev:web": "npm run dev --workspace=@cliniccare/web",
+    "test": "node --import tsx --test \"tests/**/*.test.ts\"",
+    "test:unit": "node --import tsx --test \"tests/unit/**/*.test.ts\"",
+    "test:api": "node --import tsx --test \"tests/api/**/*.test.ts\"",
+    "format:check": "npx prettier --check \"apps/**/*.{ts,tsx,js,mjs,json}\" \"prisma/**/*.{prisma,ts}\"",
+    "ci": "npm run prisma:validate && npm run typecheck:api && npm run typecheck:web && npm run test:unit && npm run build:all",
+    "production:verify": "npm run ci && npm run baseline:verify",
+    "test:e2e:workflow": "node scripts/smoke-workflow.mjs"
   },
   "dependencies": {
-    "@nestjs/config": "^12.0.0",
     "dotenv": "^16.4.5",
     "react": "19.3.0",
     "react-dom": "19.3.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/express": "^5.0.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "eslint": "9.39.5",

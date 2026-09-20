@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, ParseIntPipe, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CurrentUser, OrgId, Permissions, RequestUser } from '../common/decorators';
+import { CurrentUser, OrgId, Permissions, RequestUser, RequireIdempotency } from '../common/decorators';
 import { BillingService } from './billing.service';
 import { CreateInvoiceDto, CreatePaymentDto, CreateRefundDto } from './dto';
 
@@ -11,6 +11,7 @@ export class BillingController {
   constructor(private readonly billing: BillingService) {}
 
   @Permissions('billing.manage')
+  @RequireIdempotency()
   @Post('payments')
   createPayment(@OrgId() orgId: number, @Body() dto: CreatePaymentDto, @CurrentUser() user: RequestUser) {
     return this.billing.createPayment(orgId, dto, user.sub);
@@ -39,6 +40,7 @@ export class BillingController {
   }
 
   @Permissions('billing.manage')
+  @RequireIdempotency()
   @Post('invoices')
   createInvoice(@OrgId() orgId: number, @Body() dto: CreateInvoiceDto) {
     return this.billing.createInvoice(orgId, dto);

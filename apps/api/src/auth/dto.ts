@@ -1,12 +1,12 @@
 import { IsEmail, IsInt, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { apiConfig } from '../config';
 
-// Shared production password policy: min 8 chars, at least one letter and one
-// digit. Kept in one place so register/signup/change/reset stay consistent.
-const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&._-]{8,}$/;
+// Shared password policy is environment-configurable and applied consistently to register/signup/change/reset.
+const PASSWORD_PATTERN = new RegExp(`^(?=.*[A-Za-z])(?=.*[\\d])(?=.*[@$!%*#?&._-])[A-Za-z\\d@$!%*#?&._-]{${apiConfig.passwordMinLength},}$`);
 
 export const StrongPassword = (): PropertyDecorator =>
   Matches(PASSWORD_PATTERN, {
-    message: 'Password must be at least 8 characters with at least one letter and one number',
+    message: `Password must be at least ${apiConfig.passwordMinLength} characters with letters, digits, and a special character`,
   });
 
 export class RegisterDto {
@@ -14,7 +14,7 @@ export class RegisterDto {
   email!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(apiConfig.passwordMinLength)
   @StrongPassword()
   password!: string;
 
@@ -42,7 +42,7 @@ export class TenantSignupDto {
   email!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(apiConfig.passwordMinLength)
   @StrongPassword()
   password!: string;
 
@@ -83,7 +83,7 @@ export class ChangePasswordDto {
   currentPassword!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(apiConfig.passwordMinLength)
   @StrongPassword()
   newPassword!: string;
 }
@@ -98,7 +98,7 @@ export class ResetPasswordDto {
   token!: string;
 
   @IsString()
-  @MinLength(8)
+  @MinLength(apiConfig.passwordMinLength)
   @StrongPassword()
   newPassword!: string;
 }

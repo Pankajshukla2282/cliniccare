@@ -1,0 +1,2 @@
+'use client';
+export default function Error({reset}:{error:Error&{digest?:string};reset:()=>void}){return <main className="mx-auto flex min-h-screen max-w-5xl items-center justify-center p-6"><section className="w-full max-w-lg rounded-2xl border p-6"><h1 className="text-xl font-semibold">Something went wrong</h1><p className="mt-2 text-sm text-slate-600">The page could not be loaded. No clinical details are displayed here.</p><button className="mt-4 rounded-md border px-4 py-2" onClick={()=>reset()}>Try again</button></section></main>}
