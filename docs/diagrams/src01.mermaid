@@ -7,7 +7,7 @@ flowchart TB
   end
 
   subgraph BROWSER["Browser — any subdomain"]
-    WEB["Next.js 14 Web · :3100<br/>standalone output, Tailwind + shadcn/ui<br/>middleware.ts (tenant subdomain parse)<br/>TenantThemeProvider + TenantBanner"]
+    WEB["Next.js 16 Web · :3000<br/>standalone output, Tailwind + shadcn/ui<br/>proxy.ts (tenant subdomain parse)<br/>TenantThemeProvider + TenantBanner"]
   end
 
   subgraph INGRESS["NGINX Ingress — cliniccare-ingress"]

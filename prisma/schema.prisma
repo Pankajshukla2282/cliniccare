@@ -186,6 +186,8 @@ model Organization {
   cmsPages              CmsPage[]
   notificationTemplates NotificationTemplate[]
   rolePermissions       RolePermission[]
+  memberships            OrganizationMembership[]
+  roleAssignments        UserRole[]
   idempotencyKeys       IdempotencyKey[]
   medicines             Medicine[]
   labReports            LabReport[]
@@ -212,6 +214,8 @@ model Clinic {
 
   organization Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   users        User[]
+  defaultMemberships OrganizationMembership[] @relation("ClinicDefaultMemberships")
+  roleAssignments UserRole[]
   doctors      Doctor[]
   schedules    DoctorSchedule[]
   holidays     ClinicHoliday[]
@@ -245,6 +249,7 @@ model User {
   patient       Patient?
   doctor        Doctor?
   roles         UserRole[]
+  memberships   OrganizationMembership[]
   refreshTokens RefreshToken[]
   notifications Notification[]
   auditLogs     AuditLog[]
@@ -255,15 +260,39 @@ model User {
   @@map("users")
 }
 
+model OrganizationMembership {
+  id              Int        @id @default(autoincrement())
+  userId          Int
+  organizationId  Int
+  defaultClinicId Int?
+  status          UserStatus @default(ACTIVE)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  defaultClinic Clinic?       @relation("ClinicDefaultMemberships", fields: [defaultClinicId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, status])
+  @@map("organization_memberships")
+}
+
 model UserRole {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  role      Role
-  createdAt DateTime @default(now())
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  organizationId Int?
+  clinicId       Int?
+  role           Role
+  scopeKey       String   @unique
+  createdAt      DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  clinic       Clinic?      @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, role])
+  @@index([userId, organizationId])
+  @@index([organizationId, clinicId, role])
   @@map("user_roles")
 }
 

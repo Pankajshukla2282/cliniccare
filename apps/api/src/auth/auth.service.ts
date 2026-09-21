@@ -45,24 +45,25 @@ export class AuthService {
     private readonly audit: AuditService,
   ) {}
 
-  private async permissionsFor(userId: number, primaryRole: Role): Promise<string[]> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { organizationId: true },
+  private async permissionsFor(userId: number, primaryRole: Role, organizationId: number): Promise<string[]> {
+    const assignments = await this.prisma.userRole.findMany({
+      where: { userId, OR: [{ organizationId }, { organizationId: null, role: Role.SUPER_ADMIN }] },
+      select: { role: true },
     });
-    const orgId = user?.organizationId ?? undefined;
-    const [extraRoles, perms] = await Promise.all([
-      this.prisma.userRole.findMany({ where: { userId } }),
-      this.prisma.rolePermission.findMany({
-        where: orgId !== null ? { OR: [{ organizationId: orgId }, { organizationId: null }] } : {},
-      }),
-    ]);
-    const roles = new Set<Role>([primaryRole, ...extraRoles.map((r) => r.role)]);
+    const roles = new Set<Role>();
+    if (primaryRole === Role.SUPER_ADMIN) roles.add(primaryRole);
+    const home = await this.prisma.user.findUnique({ where: { id: userId }, select: { organizationId: true } });
+    if (home?.organizationId === organizationId) roles.add(primaryRole);
+    for (const assignment of assignments) roles.add(assignment.role);
+    const perms = await this.prisma.rolePermission.findMany({
+      where: { role: { in: [...roles] }, OR: [{ organizationId }, { organizationId: null }] },
+      select: { role: true, permission: true },
+    });
     return perms.filter((p) => roles.has(p.role)).map((p) => p.permission);
   }
 
   private async issueTokens(userId: number, email: string, role: Role, organizationId: number) {
-    const permissions = await this.permissionsFor(userId, role);
+    const permissions = await this.permissionsFor(userId, role, organizationId);
     const accessToken = await this.jwt.signAsync({ sub: userId, email, role, permissions, organizationId });
     const refreshToken = randomBytes(48).toString('hex');
     await this.prisma.refreshToken.create({
@@ -98,6 +99,13 @@ export class AuthService {
         lastName: dto.lastName,
         primaryRole: role,
       },
+    });
+
+    await this.prisma.organizationMembership.create({
+      data: { userId: user.id, organizationId: dto.organizationId },
+    });
+    await this.prisma.userRole.create({
+      data: { userId: user.id, organizationId: dto.organizationId, role, scopeKey: `${user.id}:${role}:ORG:${dto.organizationId}` },
     });
 
     await this.prisma.patient.create({
@@ -175,6 +183,13 @@ export class AuthService {
         lastName: dto.lastName,
         primaryRole: Role.CLINIC_ADMIN,
       },
+    });
+
+    await this.prisma.organizationMembership.create({
+      data: { userId: user.id, organizationId: org.id, defaultClinicId: clinic.id },
+    });
+    await this.prisma.userRole.create({
+      data: { userId: user.id, organizationId: org.id, clinicId: clinic.id, role: Role.CLINIC_ADMIN, scopeKey: `${user.id}:${Role.CLINIC_ADMIN}:CLINIC:${clinic.id}` },
     });
 
     await this.seedTenantDefaults(org.id);
@@ -348,10 +363,10 @@ export class AuthService {
   async me(userId: number) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      include: { roles: true, patient: true, doctor: true },
+      include: { roles: true, memberships: { include: { organization: true, defaultClinic: true } }, patient: true, doctor: true },
     });
     if (!user) throw new UnauthorizedException('User not found');
-    return { ...this.safe(user), roles: user.roles.map((r) => r.role) };
+    return { ...this.safe(user), roles: user.roles.map((r) => ({ role: r.role, organizationId: r.organizationId, clinicId: r.clinicId })), memberships: user.memberships.map((m) => ({ organizationId: m.organizationId, organization: m.organization, defaultClinic: m.defaultClinic })) };
   }
 
   private safe(user: { id: number; email: string; firstName: string; lastName: string; primaryRole: Role; status: string; organizationId: number }) {

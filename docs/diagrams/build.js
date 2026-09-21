@@ -89,7 +89,7 @@ function copySrc(btn){
 `;
 
 const descs = [
-  "Users (patient/doctor/staff/super admin) reach the platform through the NGINX ingress; the Web (Next.js 14, :3100) and API (NestJS, :3000) run in the K8s namespace cliniccare against PostgreSQL 15 + Redis; external providers (S3/SMTP/SMS/payments/video) are configured via secrets but not yet wired.",
+  "Users (patient/doctor/staff/super admin) reach the platform through the NGINX ingress; the Web (Next.js 16, :3100) and API (NestJS, :3000) run in the K8s namespace cliniccare against PostgreSQL 15 + Redis; external providers (S3/SMTP/SMS/payments/video) are configured via secrets but not yet wired.",
   "All 21 app.module imports grouped into 5 concern clusters: Platform core (auth, users, tenants, audit+RBAC, prisma), Directory (clinics, doctors, catalog), Clinical (patients, appointments, clinical, documents, treatments, skin), Commerce (products, orders, billing), Engagement (notifications, cms, engagement, search, reports) \u2014 all inside one NestJS app.module.",
   "Public POST /auth/tenant-signup (name, email, password) \u2192 create Organization (TRIAL) + CLINIC_ADMIN user + default Clinic + seed (doctors, services, products) \u2192 201 + org-scoped JWT \u2192 RBAC checks at every org-scoped call.",
   "Core Prisma model groups and FK relationships: Organization/Clinic/Directory \u2192 User/Role/RBAC, Doctor (specialty/schedule/leave) + Patient (EMR/consult/prescription/treatments/skin), Commerce (product/order/billing/coupon/refund), Engagement (notifications/cms), all org-scoped.",

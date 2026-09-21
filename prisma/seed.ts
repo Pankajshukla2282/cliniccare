@@ -108,7 +108,7 @@ async function main() {
   }
   const effectiveAdminPassword = adminPassword ?? 'ChangeMe123!';
   const adminHash = await bcrypt.hash(effectiveAdminPassword, BCRYPT_ROUNDS);
-  await prisma.user.upsert({
+  const adminUser = await prisma.user.upsert({
     where: { email: adminEmail },
     create: {
       organizationId: org.id,
@@ -124,7 +124,7 @@ async function main() {
   const superAdminEmail = process.env.SEED_SUPER_ADMIN_EMAIL ?? 'superadmin@cliniccare.local';
   const effectiveSuperAdminPassword = superAdminPassword ?? 'SuperAdmin123!';
   const superAdminHash = await bcrypt.hash(effectiveSuperAdminPassword, BCRYPT_ROUNDS);
-  await prisma.user.upsert({
+  const superAdminUser = await prisma.user.upsert({
     where: { email: superAdminEmail },
     create: {
       organizationId: platformOrg.id,
@@ -135,6 +135,47 @@ async function main() {
       primaryRole: 'SUPER_ADMIN',
     },
     update: { passwordHash: superAdminHash },
+  });
+
+  await prisma.organizationMembership.upsert({
+    where: { userId_organizationId: { userId: adminUser.id, organizationId: org.id } },
+    create: { userId: adminUser.id, organizationId: org.id },
+    update: {},
+  });
+  await prisma.organizationMembership.upsert({
+    where: { userId_organizationId: { userId: superAdminUser.id, organizationId: platformOrg.id } },
+    create: { userId: superAdminUser.id, organizationId: platformOrg.id },
+    update: {},
+  });
+  await prisma.userRole.upsert({
+    where: { scopeKey: `${adminUser.id}:ADMIN:ORG:${org.id}` },
+    create: { userId: adminUser.id, organizationId: org.id, role: Role.ADMIN, scopeKey: `${adminUser.id}:ADMIN:ORG:${org.id}` },
+    update: {},
+  });
+  await prisma.userRole.upsert({
+    where: { scopeKey: `${superAdminUser.id}:SUPER_ADMIN:ORG:${platformOrg.id}` },
+    create: { userId: superAdminUser.id, organizationId: platformOrg.id, role: Role.SUPER_ADMIN, scopeKey: `${superAdminUser.id}:SUPER_ADMIN:ORG:${platformOrg.id}` },
+    update: {},
+  });
+
+  const secondOrg = await prisma.organization.upsert({
+    where: { name: 'Aarogyam Skin & Wellness' },
+    create: { name: 'Aarogyam Skin & Wellness', slug: 'aarogyam-demo', plan: 'STARTER', status: 'TRIAL', maxClinics: 2, maxDoctors: 10, maxPatients: 500 },
+    update: { slug: 'aarogyam-demo', status: 'TRIAL' },
+  });
+  const existingSecondClinic = await prisma.clinic.findFirst({ where: { organizationId: secondOrg.id, name: 'Aarogyam Main Clinic' } });
+  const secondClinic = existingSecondClinic ?? await prisma.clinic.create({
+    data: { organizationId: secondOrg.id, name: 'Aarogyam Main Clinic', city: 'Nagpur', state: 'Maharashtra' },
+  });
+  await prisma.organizationMembership.upsert({
+    where: { userId_organizationId: { userId: adminUser.id, organizationId: secondOrg.id } },
+    create: { userId: adminUser.id, organizationId: secondOrg.id, defaultClinicId: secondClinic.id },
+    update: { defaultClinicId: secondClinic.id, status: 'ACTIVE' },
+  });
+  await prisma.userRole.upsert({
+    where: { scopeKey: `${adminUser.id}:CLINIC_ADMIN:CLINIC:${secondClinic.id}` },
+    create: { userId: adminUser.id, organizationId: secondOrg.id, clinicId: secondClinic.id, role: Role.CLINIC_ADMIN, scopeKey: `${adminUser.id}:CLINIC_ADMIN:CLINIC:${secondClinic.id}` },
+    update: {},
   });
 
   const demoClinics = [
@@ -151,6 +192,16 @@ async function main() {
         update: { organizationId: org.id, name: c.name, city: c.city, state: c.state },
       }),
     );
+  }
+
+  const mainClinic = clinics[0];
+  if (mainClinic) {
+    await prisma.organizationMembership.update({ where: { userId_organizationId: { userId: adminUser.id, organizationId: org.id } }, data: { defaultClinicId: mainClinic.id } });
+    await prisma.userRole.upsert({
+      where: { scopeKey: `${adminUser.id}:CLINIC_ADMIN:CLINIC:${mainClinic.id}` },
+      create: { userId: adminUser.id, organizationId: org.id, clinicId: mainClinic.id, role: Role.CLINIC_ADMIN, scopeKey: `${adminUser.id}:CLINIC_ADMIN:CLINIC:${mainClinic.id}` },
+      update: {},
+    });
   }
 
   for (const s of [

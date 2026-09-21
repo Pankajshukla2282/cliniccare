@@ -54,73 +54,74 @@ export class TenantAccessGuard implements CanActivate {
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      ctx.getHandler(),
-      ctx.getClass(),
-    ]);
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [ctx.getHandler(), ctx.getClass()]);
     if (isPublic) return true;
 
-    const req = ctx.switchToHttp().getRequest<{
-      user?: {
-        sub?: number;
-        organizationId?: number;
-        role?: string;
-        permissions?: string[];
-        clinicId?: number | null;
-        email?: string;
-      };
-    }>();
-
+    const req = ctx.switchToHttp().getRequest<any>();
     const sub = Number(req.user?.sub);
-    if (!Number.isInteger(sub) || sub < 1) {
-      throw new UnauthorizedException('Invalid authenticated principal');
-    }
+    if (!Number.isInteger(sub) || sub < 1) throw new UnauthorizedException('Invalid authenticated principal');
 
     const user = await this.prisma.user.findUnique({
       where: { id: sub },
       select: {
-        id: true,
-        email: true,
-        organizationId: true,
-        clinicId: true,
-        primaryRole: true,
-        status: true,
-        roles: { select: { role: true } },
-        organization: { select: { status: true } },
+        id: true, email: true, organizationId: true, clinicId: true, primaryRole: true, status: true,
+        organization: { select: { id: true, slug: true, status: true } },
+        memberships: { where: { status: 'ACTIVE' }, select: { organizationId: true, defaultClinicId: true, organization: { select: { id: true, slug: true, status: true } } } },
       },
     });
+    if (!user || user.status !== 'ACTIVE') throw new UnauthorizedException('Account is inactive or suspended');
 
-    if (!user || user.status !== 'ACTIVE') {
-      throw new UnauthorizedException('Account is inactive or suspended');
-    }
+    const requestedSlug = String(req.header('x-tenant-slug') ?? '').trim().toLowerCase();
+    let organizationId = user.organizationId;
+    let tenantSlug = user.organization.slug ?? undefined;
 
-    // SUPER_ADMIN can manage tenant lifecycle, but must still be an active user.
-    if (user.primaryRole !== 'SUPER_ADMIN' && !['ACTIVE', 'TRIAL'].includes(user.organization.status)) {
+    if (requestedSlug && requestedSlug !== tenantSlug) {
+      if (user.primaryRole === 'SUPER_ADMIN') {
+        const target = await this.prisma.organization.findFirst({ where: { slug: requestedSlug, status: { in: ['ACTIVE', 'TRIAL'] } }, select: { id: true, slug: true } });
+        if (!target) throw new ForbiddenException('Requested tenant is unavailable');
+        organizationId = target.id;
+        tenantSlug = target.slug ?? undefined;
+      } else {
+        const membership = user.memberships.find((m) => m.organization.slug === requestedSlug && ['ACTIVE', 'TRIAL'].includes(m.organization.status));
+        if (!membership) throw new ForbiddenException('User is not a member of the requested tenant');
+        organizationId = membership.organizationId;
+        tenantSlug = membership.organization.slug ?? undefined;
+      }
+    } else if (user.primaryRole !== 'SUPER_ADMIN' && !['ACTIVE', 'TRIAL'].includes(user.organization.status)) {
       throw new ForbiddenException('Organization is not active');
     }
 
-    const roles = new Set([user.primaryRole, ...user.roles.map((entry) => entry.role)]);
-    const rolePermissions = await this.prisma.rolePermission.findMany({
+    const requestedClinic = Number(req.header('x-clinic-id'));
+    let clinicId = user.clinicId ?? null;
+    if (Number.isInteger(requestedClinic) && requestedClinic > 0) {
+      const clinic = await this.prisma.clinic.findFirst({ where: { id: requestedClinic, organizationId }, select: { id: true } });
+      if (!clinic) throw new ForbiddenException('Requested clinic is outside the active tenant');
+      clinicId = clinic.id;
+    }
+
+    const scopedAssignments = await this.prisma.userRole.findMany({
       where: {
-        role: { in: [...roles] },
-        OR: [{ organizationId: user.organizationId }, { organizationId: null }],
+        userId: user.id,
+        OR: [{ organizationId }, { organizationId: null, role: 'SUPER_ADMIN' }],
+        AND: [{ OR: [{ clinicId: null }, { clinicId }] }],
       },
+      select: { role: true, organizationId: true, clinicId: true },
+    });
+    const roles = new Set<string>();
+    if (user.primaryRole === 'SUPER_ADMIN' || organizationId === user.organizationId) roles.add(user.primaryRole);
+    for (const assignment of scopedAssignments) roles.add(assignment.role);
+
+    if (!roles.size) throw new ForbiddenException('No role is assigned in the active tenant');
+
+    const rolePermissions = await this.prisma.rolePermission.findMany({
+      where: { role: { in: [...roles] as any }, OR: [{ organizationId }, { organizationId: null }] },
       select: { permission: true },
     });
 
-    // Replace mutable claims with authoritative database values. Permissions
-    // are refreshed on every request so role/permission changes take effect
-    // without waiting for an access-token refresh.
     req.user = {
-      ...req.user,
-      sub: user.id,
-      email: user.email,
-      organizationId: user.organizationId,
-      clinicId: user.clinicId,
-      role: user.primaryRole,
-      permissions: rolePermissions.map((entry) => entry.permission),
+      ...req.user, sub: user.id, email: user.email, organizationId, clinicId, role: [...roles][0],
+      permissions: rolePermissions.map((entry) => entry.permission), tenantSlug, roles: [...roles],
     };
-
     return true;
   }
 }

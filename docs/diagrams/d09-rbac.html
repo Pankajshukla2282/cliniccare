@@ -37,36 +37,31 @@ footer{color:var(--muted);font-size:11px;text-align:center;padding:20px}</style>
 </nav>
 </header>
 <main>
-<p class="desc">SUPER_ADMIN (global, all scopes) → CLINIC_ADMIN/CADMIN → org-scoped roles (DOCTOR, NURSE, RECEPTIONIST, PHARMACIST, ACCOUNTANT, CONTENT_MANAGER, PATIENT); RBAC scope enforced as RbacScope.org — cross-tenant access is a 404.</p>
+<p class="desc">RBAC is additive rather than a role hierarchy: SUPER_ADMIN is platform-scoped; tenant roles are assigned at organization or clinic scope. Effective permissions are calculated from the active tenant + clinic + scoped role assignments and tenant/platform permission rows.</p>
 <div class="toolbar"><button onclick="copySrc(this)">Copy mermaid source</button></div>
 <div class="panel"><pre class="mermaid">
 flowchart TD
-  SA["SUPER_ADMIN<br/>global, all scopes"]
-  CA["CLINIC_ADMIN<br/>org-wide"]
-  AD["ADMIN"]
-  DR["DOCTOR"]
-  NUR["NURSE"]
-  RC["RECEPTIONIST"]
-  PH["PHARMACIST"]
-  AC["ACCOUNTANT"]
-  CM["CONTENT_MANAGER"]
-  PT["PATIENT"]
+  ENV["Deployment environment\ndevelopment / staging / production"]
+  T["Organization / Tenant"]
+  M["OrganizationMembership\nuser ↔ tenant"]
+  C["Clinic scope"]
+  UR["UserRole\norganization or clinic"]
+  RP["RolePermission\nplatform default + tenant override"]
+  EP["Effective permissions"]
+  SA["SUPER_ADMIN\nplatform scope"]
+  TR["Tenant roles\nADMIN / CLINIC_ADMIN / DOCTOR / NURSE / RECEPTIONIST / PHARMACIST / ACCOUNTANT / CONTENT_MANAGER / PATIENT"]
 
-  SA --> CA
-  CA --> AD
-  AD --> DR
-  AD --> NUR
-  AD --> RC
-  AD --> PH
-  AD --> AC
-  AD --> CM
-  AD --> PT
-
-  DR -.->|"medical_record.write, prescription.*"|PT
-  PH -.->|"inventory.*, orders"|PT
-  RC -.->|"appointment.*, patient.read"|PT
-  AC -.->|"billing.*, report.view"|PT
-  CM -.->|"cms.*"|PT
+  ENV --> T
+  T --> M
+  T --> C
+  M --> UR
+  C --> UR
+  SA --> EP
+  TR --> UR
+  UR --> EP
+  RP --> EP
+  EP --> API["Protected API request"]
+  API --> DATA["Tenant-scoped data"]
 </pre></div>
 </main>
 <footer>ClinicCare — generated from the implemented codebase  · docs/diagrams/</footer>

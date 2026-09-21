@@ -17,6 +17,7 @@ export interface RequestUser {
   permissions: string[];
   organizationId: number;
   clinicId?: number | null;
+  tenantSlug?: string;
 }
 
 export const CurrentUser = createParamDecorator(

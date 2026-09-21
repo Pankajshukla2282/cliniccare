@@ -37,7 +37,7 @@ footer{color:var(--muted);font-size:11px;text-align:center;padding:20px}</style>
 </nav>
 </header>
 <main>
-<p class="desc">Users (patient/doctor/staff/super admin) reach the platform through the NGINX ingress; the Web (Next.js 14, :3100) and API (NestJS, :3000) run in the K8s namespace cliniccare against PostgreSQL 15 + Redis; external providers (S3/SMTP/SMS/payments/video) are configured via secrets but not yet wired.</p>
+<p class="desc">Users (patient/doctor/staff/super admin) reach the platform through the NGINX ingress; the Web (Next.js 16, :3100) and API (NestJS, :3000) run in the K8s namespace cliniccare against PostgreSQL 15 + Redis; external providers (S3/SMTP/SMS/payments/video) are configured via secrets but not yet wired.</p>
 <div class="toolbar"><button onclick="copySrc(this)">Copy mermaid source</button></div>
 <div class="panel"><pre class="mermaid">
 flowchart TB
@@ -49,7 +49,7 @@ flowchart TB
   end
 
   subgraph BROWSER["Browser — any subdomain"]
-    WEB["Next.js 14 Web · :3100<br/>standalone output, Tailwind + shadcn/ui<br/>middleware.ts (tenant subdomain parse)<br/>TenantThemeProvider + TenantBanner"]
+    WEB["Next.js 16 Web · :3000<br/>standalone output, Tailwind + shadcn/ui<br/>proxy.ts (tenant subdomain parse)<br/>TenantThemeProvider + TenantBanner"]
   end
 
   subgraph INGRESS["NGINX Ingress — cliniccare-ingress"]

@@ -85,6 +85,11 @@ export class UsersService {
       },
     });
 
+    await this.prisma.organizationMembership.create({ data: { userId: user.id, organizationId: orgId, defaultClinicId: dto.clinicId ?? null } });
+    await this.prisma.userRole.create({
+      data: { userId: user.id, organizationId: orgId, clinicId: dto.clinicId ?? null, role: dto.role, scopeKey: `${user.id}:${dto.role}:${dto.clinicId ? `CLINIC:${dto.clinicId}` : `ORG:${orgId}`}` },
+    });
+
     if (dto.role === 'PATIENT') {
       await this.prisma.patient.create({
         data: { userId: user.id, organizationId: orgId, patientNumber: patientNumber() },
@@ -128,10 +133,10 @@ export class UsersService {
     this.assertCanManageRole(actor, dto.role);
     await this.get(id, organizationId);
 
-    await this.prisma.userRole.upsert({
-      where: { userId_role: { userId: id, role: dto.role } },
-      create: { userId: id, role: dto.role },
-      update: {},
+    const scopeKey = `${id}:${dto.role}:ORG:${organizationId}`;
+    await this.prisma.userRole.deleteMany({ where: { userId: id, organizationId, role: dto.role, clinicId: null } });
+    await this.prisma.userRole.create({
+      data: { userId: id, organizationId, role: dto.role, scopeKey },
     });
     return this.get(id, organizationId);
   }

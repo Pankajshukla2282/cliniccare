@@ -1,7 +1,7 @@
 sequenceDiagram
   autonumber
   participant B as Browser (subdomain)
-  participant MW as next middleware.ts
+  participant MW as next proxy.ts
   participant L as lib/tenant-data.ts (Prisma + React cache)
   participant DB as PostgreSQL
   participant TP as TenantThemeProvider

@@ -28,7 +28,7 @@ Bidders must demonstrate the ability to deliver, on Kubernetes only:
   org-scoped RBAC, full patient journey, two-doctor EECP/skin model, and
   isolation-by-design.
 - The technical baseline fully described in docs/technical-design.md: NestJS +
-  Prisma (55 models) + Next.js 14 + Postgres/Redis + k8s/HPA.
+  Prisma + Next.js 16 + Postgres/Redis + k8s/HPA.
 - All BRD P0 functional + NFR-1..8 non-functional requirements.
 
 ## 4. Content and format of proposals

@@ -31,6 +31,22 @@ $env:DATABASE_URL = "postgresql://clinic:<PASSWORD-FROM-.env>@localhost:5432/cli
 
 ## Track A — Local development
 
+### A0. One-command startup
+
+On Linux, macOS, WSL, or Git Bash you can run the same startup flow used by CI-style local development:
+
+```bash
+bash scripts/start-dev.sh
+```
+
+On Windows PowerShell use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\scripts\\start-dev.ps1
+```
+
+Both launchers use the same `.env` ports, wait for API/Web health endpoints, write logs under `logs/`, and clean up child processes on exit. The web launcher intentionally passes only supported Next.js dev flags.
+
 ### A1. Bring up PostgreSQL + Redis (in-cluster, once)
 
 Apply the base; Secrets are generated from root `.env` by Kustomize, so use
@@ -88,8 +104,8 @@ rotates the demo passwords to match `.env`.
 ### A5. Run the API
 
 ```powershell
-npm run start:dev --workspace=apps/api
-# -> http://localhost:3000   swagger at http://localhost:3000/docs (dev only)
+npm run dev --workspace=@cliniccare/api
+# -> http://localhost:3100   swagger at http://localhost:3100/docs (dev only)
 ```
 
 Health: `GET http://localhost:3000/healthz` → `{"status":"ok","service":"cliniccare-api",…}`.
@@ -97,8 +113,8 @@ Health: `GET http://localhost:3000/healthz` → `{"status":"ok","service":"clini
 ### A6. Run the web app
 
 ```powershell
-npm run dev --workspace=apps/web
-# -> http://localhost:3100
+npm run dev --workspace=@cliniccare/web
+# -> http://localhost:3000
 ```
 
 Health: `GET http://localhost:3100/healthz`.
@@ -107,7 +123,7 @@ Health: `GET http://localhost:3100/healthz`.
 > dynamic (subdomain theming) and reads tenant settings through Prisma at
 > request time.
 > `NEXT_PUBLIC_*` values are inlined at build time; for dev the default in
-> `next.config.js` (`http://localhost:3000`) applies.
+> `apps/web/lib/config.ts` supplies the development API default (`http://localhost:3100`). The web listens on `WEB_PORT` (default `3000`).
 
 ### A7. Verify multi-tenant theming locally
 
@@ -116,14 +132,14 @@ Health: `GET http://localhost:3100/healthz`.
 127.0.0.1 cliniccare-demo.localhost
 ```
 
-- `http://cliniccare-demo.localhost:3100/` → teal tenant theme, tenant meta/title, org-scoped banner
-- `http://localhost:3100/` → default blue platform theme
-- Dev-only query fallback: `http://localhost:3100/?tenant=cliniccare-demo`
+- `http://cliniccare-demo.localhost:3000/` → teal tenant theme, tenant meta/title, org-scoped banner
+- `http://localhost:3000/` → default blue platform theme
+- Dev-only query fallback: `http://localhost:3000/?tenant=cliniccare-demo`
 
 Quick CLI check (no hosts edit needed):
 
 ```powershell
-curl.exe -s -H "Host: cliniccare-demo.localhost" "http://127.0.0.1:3100/" | Select-String -Pattern "cliniccare-demo"
+curl.exe -s -H "Host: cliniccare-demo.localhost" "http://127.0.0.1:3000/" | Select-String -Pattern "cliniccare-demo"
 ```
 
 Expect an `x-tenant-subdomain: cliniccare-demo` response header and tenant-branded HTML.
@@ -235,7 +251,34 @@ kubectl -n cliniccare get cronjob
 - `docs/runbook-cloud.md` — cloud build + deploy via GitHub Actions
 - `prisma/seed.ts` + `prisma/schema.prisma` — seed + validated schema,
   migrations in `prisma/migrations/`
-- `apps/api` — NestJS (auth/RBAC/tenants + domain modules, port 3000),
+- `apps/api` — NestJS (auth/RBAC/tenants + domain modules, port 3100),
   hardened: helmet, throttler, graceful shutdown
 - `apps/web` — Next.js (Tailwind + shadcn/ui, subdomain tenant theming,
-  standalone output, port 3000 in container / 3100 in dev)
+  standalone output, port 3000 in container / 3000 in dev)
+## Local infrastructure mode (Windows / Unix)
+
+Development startup now supports `DEV_INFRA_MODE`:
+
+- `auto` (default): use Kubernetes when reachable; otherwise use PostgreSQL/Redis already running on localhost.
+- `local`: never contacts Kubernetes; requires PostgreSQL on `POSTGRES_LOCAL_PORT` and Redis on `REDIS_LOCAL_PORT`.
+- `k8s`: require a reachable Kubernetes cluster and port-forward PostgreSQL/Redis from the configured namespace.
+
+For a normal laptop development setup without Docker Desktop Kubernetes:
+
+```text
+DEV_INFRA_MODE=local
+POSTGRES_LOCAL_PORT=5432
+REDIS_LOCAL_PORT=6379
+```
+
+Then run `npm run start-dev:windows` or `bash scripts/start-dev.sh`.
+
+Before the first API start after a schema update, validate and generate Prisma:
+
+```bash
+npm run prisma:validate
+npm run db:generate
+npx prisma migrate status
+```
+
+The multi-tenancy schema intentionally uses a named `ClinicDefaultMemberships` relation between `Clinic.defaultMemberships` and `OrganizationMembership.defaultClinic`. Do not reintroduce a second `Clinic.memberships` relation unless a real `clinicId` foreign key is added to `OrganizationMembership` and both Prisma relation sides are explicitly named.

@@ -13,7 +13,7 @@ async function bootstrap() {
   app.useBodyParser('json', { limit: apiConfig.bodyLimit });
   app.useBodyParser('urlencoded', { limit: apiConfig.bodyLimit, extended: true });
   app.use(helmet({ contentSecurityPolicy: apiConfig.isProduction ? undefined : false }));
-  app.enableCors({ origin: apiConfig.webOrigin, credentials: apiConfig.corsAllowCredentials, methods: ['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization','X-Request-Id','Idempotency-Key','X-Purpose-Of-Use'] });
+  app.enableCors({ origin: apiConfig.webOrigin, credentials: apiConfig.corsAllowCredentials, methods: ['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'], allowedHeaders: ['Content-Type','Authorization','X-Request-Id','Idempotency-Key','X-Purpose-Of-Use','X-Tenant-Slug','X-Clinic-Id'] });
   app.setGlobalPrefix(apiConfig.basePath.replace(/^\//, ''));
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true, transformOptions: { enableImplicitConversion: true }, disableErrorMessages: apiConfig.isProduction }));
 

@@ -1,9 +1,9 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '../generated/prisma/client';
 import { CurrentUser, OrgId, Permissions, RequestUser } from '../common/decorators';
 import { RbacService, RbacScope } from './rbac.service';
-import { AssignPermissionDto, AssignRoleDto } from './rbac.dto';
+import { AddMembershipDto, AssignPermissionDto, AssignRoleDto } from './rbac.dto';
 
 @ApiTags('rbac')
 @ApiBearerAuth()
@@ -48,6 +48,12 @@ export class RbacController {
   @Get('users/:userId/roles')
   getUserRoles(@OrgId() orgId: number, @CurrentUser() actor: RequestUser, @Param('userId') userId: string) {
     return this.rbac.getUserRoles(Number(userId), this.scopeFor(orgId, actor));
+  }
+
+  @Permissions('*')
+  @Post('users/:userId/memberships')
+  addMembership(@OrgId() orgId: number, @CurrentUser() actor: RequestUser, @Param('userId') userId: string, @Body() dto: AddMembershipDto) {
+    return this.rbac.addMembership(Number(userId), dto, this.scopeFor(orgId, actor));
   }
 
   @Permissions('*')

@@ -34,7 +34,6 @@ import { IdempotencyInterceptor } from './common/idempotency.interceptor';
 import { RequestSecurityMiddleware } from './common/request-security.middleware';
 import { HealthController } from './health/health.controller';
 import { PublicController } from './common/public.controller';
-import { TenantController } from './tenant.controller';
 import { apiConfig } from './config';
 
 @Module({
@@ -45,7 +44,7 @@ import { apiConfig } from './config';
     CatalogModule, ReportsModule, SearchModule, SkinModule, TenantsModule, TreatmentsModule, UsersModule, CmsModule,
     QueueModule, LabsModule,
   ],
-  controllers: [HealthController, PublicController, TenantController],
+  controllers: [HealthController, PublicController],
   providers: [
     Reflector,
     { provide: APP_GUARD, useClass: ThrottlerGuard },

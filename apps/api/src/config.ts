@@ -11,6 +11,7 @@ function listEnv(name: string, fallback: string[]): string[] {
 }
 
 const nodeEnv = process.env.NODE_ENV ?? 'development';
+const environment = process.env.APP_ENV ?? nodeEnv;
 const isProduction = nodeEnv === 'production';
 const jwtSecret = process.env.JWT_SECRET?.trim() ?? '';
 const databaseUrl = process.env.DATABASE_URL?.trim() ?? '';
@@ -22,6 +23,7 @@ if (isProduction && (!jwtSecret || jwtSecret.length < 32)) {
 
 export const apiConfig = {
   nodeEnv,
+  environment,
   isProduction,
   host: process.env.API_HOST ?? process.env.HOST ?? '127.0.0.1',
   port: numberEnv('API_PORT', numberEnv('PORT', 3100)),

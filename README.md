@@ -12,7 +12,7 @@ board-in clinics without re-architecture.
 
 | Layer           | Technology                                      |
 |-----------------|-------------------------------------------------|
-| Web             | Next.js 14 (App Router) + TypeScript + Tailwind, shadcn/ui design system, subdomain middleware, dark mode |
+| Web             | Next.js 16 (App Router) + TypeScript + Tailwind, shadcn/ui design system, subdomain proxy, dark mode |
 | API             | NestJS + TypeScript, Prisma ORM, JWT auth, org-scoped RBAC |
 | Database        | PostgreSQL (Prisma; `organizationId` scoped)    |
 | Cache / Queue   | Redis + BullMQ                                  |
@@ -113,12 +113,12 @@ enforce tenant linear- الأسsolation at the database. That is the whole
 ```
 cliniccare/
 ├── prisma/
-│   ├── schema.prisma      # 40 models incl. SaaS fields, composite tenant-keys
+│   ├── schema.prisma      # 55+ models incl. SaaS fields, composite tenant-keys
 │   ├── seed.ts            # platform org + SUPER_ADMIN, demo tenant (brand settings), RBAC matrix — idempotent
 │   └── .env.example
 ├── apps/
-│   ├── api/               # NestJS — auth/RBAC/tenants + 21 domain modules (port 3000, swagger /docs)
-│   └── web/              # Next.js — homepage + theme system (port 3100)
+│   ├── api/               # NestJS — auth/RBAC/tenants + 21 domain modules (port 3100, swagger /docs)
+│   └── web/              # Next.js — homepage + theme system (port 3000)
 ├── infrastructure/k8s/    # namespace, postgres+PVC, redis, api/web, HPA, ingress
 ```
 
@@ -162,10 +162,17 @@ npx tsx prisma/seed.ts
 ```powershell
 $env:DATABASE_URL="postgresql://clinic:clinic-change-me@localhost:5432/cliniccare"
 
-# API (NestJS) on :3000 — swagger at http://localhost:3000/docs
+# One-command local development (Windows)
+powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
+
+# Or WSL/Git Bash/Linux/macOS
+bash scripts/start-dev.sh
+
+# Individual processes
+# API (NestJS) on :3100 — swagger at http://localhost:3100/docs
 npm run dev:api
 
-# Web (Next.js) on :3100
+# Web (Next.js) on :3000
 npm run dev:web
 ```
 
@@ -190,7 +197,7 @@ Sandbox sign-in (demo only — change before shared use):
 - **Isolation**: every module is org-scoped — clients can’t read or write
   another tenant’s records (cross-tenant access returns 404). Composite
   unique keys (e.g. `[organizationId, slug]`) mirror this in the DB.
-- **Per-tenant UI/theme**: `apps/web/middleware.ts` reads the client subdomain
+- **Per-tenant UI/theme**: `apps/web/proxy.ts` reads the client subdomain
   (`<slug>.cliniccare.local` or `<slug>.localhost`), then
   `app/layout.tsx` looks up the `Organization` on the server, injects
   `Organization.settings` (brand colors, radius) as CSS variables, and sets
@@ -201,8 +208,8 @@ Sandbox sign-in (demo only — change before shared use):
   # hosts file
   127.0.0.1 cliniccare-demo.localhost
   ```
-  then open `http://cliniccare-demo.localhost:3100/` for the tenant-branded
-  skin, or `http://localhost:3100/` for the platform default. During local
+  then open `http://cliniccare-demo.localhost:3000/` for the tenant-branded
+  skin, or `http://localhost:3000/` for the platform default. During local
   dev a `?tenant=<slug>` query param is also accepted.
 
 ## API surface (highlights)
@@ -210,7 +217,7 @@ Sandbox sign-in (demo only — change before shared use):
 - `POST /api/v1/auth/login|register|tenant-signup`
 - `GET  /api/v1/rbac/...` — org-scoped roles/permissions
 - `POST /api/v1/tenants` (super-admin) — onboard/update/activate/suspend
-- Health checks: `GET /healthz` on both web (`:3100`) and API
+- Health checks: `GET /healthz` on both web (`:3000`) and API (`:3100`)
 - Public portal routes are org-scoped via required `organizationId`.
 
 ## Kubernetes
@@ -236,3 +243,18 @@ build (`cliniccare/api:<tag>` / `cliniccare/web:<tag>`).
 
 - Never commit real secrets. `.env.example` files ship placeholders; copy to
   `.env` and adjust. Manifests use `CHANGE_ME` values by design.
+
+## Multi-tenancy, environments and roles
+
+ClinicCare has explicit isolation boundaries:
+
+- **Environment:** development, staging, production; each has independent infrastructure and secrets.
+- **Tenant:** `Organization`; tenant-owned records are organization-scoped.
+- **Clinic:** operational scope within a tenant.
+- **Membership:** a user can belong to multiple organizations through `OrganizationMembership`.
+- **Role:** `UserRole` can be organization- or clinic-scoped.
+- **Permission:** platform defaults plus tenant-specific `RolePermission` overrides.
+
+Protected API requests may select context with `X-Tenant-Slug` and `X-Clinic-Id`. The server validates membership, tenant lifecycle, clinic ownership and role assignments before calculating effective permissions.
+
+See [`docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md`](docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md) for the full model.

@@ -31,7 +31,9 @@
     "format:check": "npx prettier --check \"apps/**/*.{ts,tsx,js,mjs,json}\" \"prisma/**/*.{prisma,ts}\"",
     "ci": "npm run prisma:validate && npm run typecheck:api && npm run typecheck:web && npm run test:unit && npm run build:all",
     "production:verify": "npm run ci && npm run baseline:verify",
-    "test:e2e:workflow": "node scripts/smoke-workflow.mjs"
+    "test:e2e:workflow": "node scripts/smoke-workflow.mjs",
+    "start-dev:unix": "bash scripts/start-dev.sh",
+    "start-dev:windows": "powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

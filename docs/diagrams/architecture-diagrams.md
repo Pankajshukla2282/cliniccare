@@ -3,7 +3,7 @@
 All diagrams reflect the **implemented** codebase (not the plan). Verified against:
 
 - `apps/api/src` — NestJS, 24 module controllers, Prisma (40+ models, 15 enums)
-- `apps/web` — Next.js 14 app router, Tailwind + shadcn/ui, tenant subdomain theming
+- `apps/web` — Next.js 16 app router, Tailwind + shadcn/ui, tenant subdomain theming
 - `infrastructure/k8s` — namespace `cliniccare`, Postgres/Redis/API/Web, HPA, ingress
 - `prisma/schema.prisma` + `prisma/seed.ts`
 
@@ -25,7 +25,7 @@ flowchart TB
   end
 
   subgraph BROWSER["Browser — any subdomain"]
-    WEB["Next.js 14 Web · :3100<br/>standalone output, Tailwind + shadcn/ui<br/>middleware.ts (tenant subdomain parse)<br/>TenantThemeProvider + TenantBanner"]
+    WEB["Next.js 16 Web · :3000<br/>standalone output, Tailwind + shadcn/ui<br/>proxy.ts (tenant subdomain parse)<br/>TenantThemeProvider + TenantBanner"]
   end
 
   subgraph INGRESS["NGINX Ingress — cliniccare-ingress"]
@@ -332,7 +332,7 @@ flowchart TB
 sequenceDiagram
   autonumber
   participant B as Browser (subdomain)
-  participant MW as next middleware.ts
+  participant MW as next proxy.ts
   participant L as lib/tenant-data.ts (Prisma + React cache)
   participant DB as PostgreSQL
   participant TP as TenantThemeProvider

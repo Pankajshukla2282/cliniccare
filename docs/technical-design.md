@@ -14,7 +14,7 @@ truth: `prisma/schema.prisma`, `apps/api/src`, `apps/web`, and the
 ## 2. Architecture at a glance
 
 - Monorepo (npm workspaces) with three deployable roots: `apps/api` (NestJS),
-  `apps/web` (Next.js 14 App Router), and `infrastructure/k8s` (Kubernetes
+  `apps/web` (Next.js 16 App Router), and `infrastructure/k8s` (Kubernetes
   manifests). Prisma is hoisted at `prisma/`.
 - Multi-tenant SaaS: each clinic is a tenant on its own subdomain with its own
   branding and a fully org-scoped data island. Isolation is enforced in the
@@ -34,7 +34,7 @@ cliniccare/
 │   └── migrations (if present) / db push workflow
 ├── apps/
 │   ├── api/                 # NestJS, 24 module controllers, port 3000, Swagger /docs
-│   └── web/                 # Next.js 14, port 3100, tenant subdomain theming
+│   └── web/                 # Next.js 16, port 3100, tenant subdomain theming
 ├── infrastructure/k8s/      # namespace cliniccare, postgres+PVC, redis,
 │                            # api/web deployments, HPA, ingress
 └── package.json             # workspaces root; db / prisma / build scripts
@@ -48,7 +48,7 @@ cliniccare/
 | ORM / data       | Prisma (`schema.prisma`)                         |
 | Database         | PostgreSQL (in-cluster, PVC-backed)              |
 | Cache / queue    | Redis + BullMQ                                   |
-| Web              | Next.js 14 App Router, TypeScript, Tailwind      |
+| Web              | Next.js 16 App Router, TypeScript, Tailwind      |
 | UI kit           | shadcn/ui, dark mode, per-subdomain theming      |
 | RBAC             | org-scoped roles + permissions matrix (seed)     |
 | Deploy           | Kubernetes (HPA, ingress), no Docker Compose     |
@@ -109,10 +109,20 @@ Traceability to BRD FRs is in `docs/brd.md` section 9.
 ## 9. Interfaces
 
 - Internal API: REST + Swagger (`/docs`), JSON; NestJS validation pipes.
-- Tenant web: subdomain theming via Next.js middleware + theme registry.
+- Tenant web: subdomain theming via Next.js proxy + theme registry.
 - External (deferred): patient portal checkout, payment provider, SMS/WhatsApp.
 
 ## 10. Sign-off
 
 Engineering lead: ______________  Date: ______
 Q/A lead:          ______________  Date: ______
+
+## Multi-tenant context, environments and RBAC
+
+ClinicCare separates deployment environments from tenant data. Development, staging and production use independent databases, Redis, secrets, storage and runtime namespaces. `APP_ENV` identifies the deployment environment; `Organization` identifies the tenant.
+
+A user can belong to multiple organizations through `OrganizationMembership`. `UserRole` assignments can be organization-scoped or clinic-scoped. The authenticated request selects the active tenant with `X-Tenant-Slug` and optionally the clinic with `X-Clinic-Id`; `TenantAccessGuard` validates both against database state on every protected request.
+
+Effective permissions are calculated from the roles active for the selected tenant/clinic plus platform and tenant-specific `RolePermission` rows. JWT permissions are treated as transport hints only; database RBAC is authoritative.
+
+Role assignment rules prevent tenant administrators from granting `SUPER_ADMIN`. Platform administrators manage tenant lifecycle and cross-tenant membership.

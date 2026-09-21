@@ -75,6 +75,7 @@ $WebPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 3000 }
 $PostgresLocalPort = if ($env:POSTGRES_LOCAL_PORT) { [int]$env:POSTGRES_LOCAL_PORT } else { 5432 }
 $RedisLocalPort = if ($env:REDIS_LOCAL_PORT) { [int]$env:REDIS_LOCAL_PORT } else { 6379 }
 $K8sNamespace = if ($env:K8S_NAMESPACE) { $env:K8S_NAMESPACE } else { 'cliniccare' }
+$InfraMode = if ($env:DEV_INFRA_MODE) { ($env:DEV_INFRA_MODE).ToLowerInvariant() } else { 'auto' }
 $PostgresService = if ($env:POSTGRES_SERVICE) { $env:POSTGRES_SERVICE } else { 'postgres' }
 $RedisService = if ($env:REDIS_SERVICE) { $env:REDIS_SERVICE } else { 'redis' }
 $ApiHealthPath = if ($env:API_HEALTH_PATH) { $env:API_HEALTH_PATH } else { '/healthz' }
@@ -86,6 +87,7 @@ Write-Host "[CONFIG] Web   : $WebHost`:$WebPort"
 Write-Host "[CONFIG] DB    : localhost`:$PostgresLocalPort"
 Write-Host "[CONFIG] Redis : localhost`:$RedisLocalPort"
 Write-Host "[CONFIG] K8s   : $K8sNamespace"
+Write-Host "[CONFIG] Infra : $InfraMode (local | k8s | auto)"
 Write-Host ""
 
 # ============================================================
@@ -95,7 +97,6 @@ Write-Host ""
 Write-Host "[CHECK] Checking required commands..."
 
 $Commands = @(
-    "kubectl",
     "curl.exe",
     "node.exe",
     "npm.cmd"
@@ -116,30 +117,53 @@ foreach ($Command in $Commands) {
 Write-Host ""
 
 # ============================================================
-# 3. Kubernetes
+# 3. Infrastructure mode / Kubernetes
 # ============================================================
 
-Write-Host "[CHECK] Checking Kubernetes..."
-
-kubectl version --client
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] kubectl is not working." -ForegroundColor Red
+if ($InfraMode -notin @('local','k8s','auto')) {
+    Write-Host "[ERROR] DEV_INFRA_MODE must be local, k8s, or auto." -ForegroundColor Red
     exit 1
 }
 
-kubectl cluster-info
+$UseK8s = $false
 
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] Cannot connect to Kubernetes." -ForegroundColor Red
-    Write-Host ""
-    Write-Host "Make sure Docker Desktop Kubernetes is running."
-    exit 1
+if ($InfraMode -eq 'k8s') {
+    $UseK8s = $true
+}
+elseif ($InfraMode -eq 'auto') {
+    $KubeCommand = Get-Command kubectl -ErrorAction SilentlyContinue
+    if ($KubeCommand) {
+        Write-Host "[CHECK] Kubernetes is optional in auto mode..."
+        & kubectl cluster-info *> $null
+        if ($LASTEXITCODE -eq 0) {
+            $UseK8s = $true
+            Write-Host "[OK] Kubernetes cluster reachable; using Kubernetes services." -ForegroundColor Green
+        }
+        else {
+            Write-Host "[INFO] Kubernetes is not reachable; falling back to local PostgreSQL/Redis." -ForegroundColor Yellow
+        }
+    }
+    else {
+        Write-Host "[INFO] kubectl not installed; using local PostgreSQL/Redis." -ForegroundColor Yellow
+    }
 }
 
-Write-Host "[OK] Kubernetes cluster reachable." -ForegroundColor Green
-Write-Host ""
+if ($InfraMode -eq 'k8s') {
+    Write-Host "[CHECK] Checking Kubernetes..."
+    if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
+        Write-Host "[ERROR] kubectl is required when DEV_INFRA_MODE=k8s." -ForegroundColor Red
+        exit 1
+    }
+    & kubectl cluster-info
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[ERROR] Cannot connect to Kubernetes." -ForegroundColor Red
+        Write-Host "Start Docker Desktop Kubernetes or use DEV_INFRA_MODE=local."
+        exit 1
+    }
+    Write-Host "[OK] Kubernetes cluster reachable." -ForegroundColor Green
+}
 
+if ($UseK8s) {
 # ============================================================
 # 4. Namespace
 # ============================================================
@@ -191,6 +215,8 @@ Write-Host "[INFO] Kubernetes pods:"
 kubectl get pods -n $K8sNamespace -o wide
 Write-Host ""
 
+}
+
 # ============================================================
 # 7. Helper: Test TCP port
 # ============================================================
@@ -235,6 +261,11 @@ Write-Host "[INFO] PostgreSQL localhost:$PostgresLocalPort"
 
 if (Test-Port $PostgresLocalPort) {
     Write-Host "[OK] localhost:$PostgresLocalPort already open." -ForegroundColor Green
+}
+elseif (-not $UseK8s) {
+    Write-Host "[ERROR] PostgreSQL is not listening on localhost:$PostgresLocalPort." -ForegroundColor Red
+    Write-Host "Start PostgreSQL locally or set DEV_INFRA_MODE=k8s with a reachable cluster."
+    exit 1
 }
 else {
     Write-Host "[START] Starting PostgreSQL port-forward..."
@@ -314,6 +345,11 @@ Write-Host "[INFO] Redis localhost:$RedisLocalPort"
 if (Test-Port $RedisLocalPort) {
     Write-Host "[OK] localhost:$RedisLocalPort already open." -ForegroundColor Green
 }
+elseif (-not $UseK8s) {
+    Write-Host "[ERROR] Redis is not listening on localhost:$RedisLocalPort." -ForegroundColor Red
+    Write-Host "Start Redis locally or set DEV_INFRA_MODE=k8s with a reachable cluster."
+    exit 1
+}
 else {
     Write-Host "[START] Starting Redis port-forward..."
 
@@ -382,22 +418,16 @@ else {
 
     Write-Host "[START] Starting NestJS API..."
 
-    $DistMain = Join-Path $RepoRoot "apps\api\dist\main.js"
-
-    if (-not (Test-Path $DistMain)) {
-        Write-Host "[ERROR] $DistMain does not exist." -ForegroundColor Red
-        Write-Host ""
-        Write-Host "Build the API first:"
-        Write-Host "  npm run build"
-        exit 1
-    }
-
     $env:NODE_ENV = if ($env:NODE_ENV) { $env:NODE_ENV } else { "development" }
 
+    # Development uses tsx watch so a stale/missing dist/ folder can never
+    # prevent the local API from starting.
     $ApiProcess = Start-Process `
-        -FilePath "node.exe" `
+        -FilePath "npm.cmd" `
         -ArgumentList @(
-            $DistMain
+            "run",
+            "dev",
+            "--workspace=@cliniccare/api"
         ) `
         -RedirectStandardOutput "$logDir\api.log" `
         -RedirectStandardError "$logDir\api-error.log" `
@@ -500,8 +530,7 @@ else {
             "--hostname",
             $WebHost,
             "--port",
-            "$WebPort",
-            "--include=dev"
+            "$WebPort"
         ) `
         -RedirectStandardOutput "$logDir\web.log" `
         -RedirectStandardError "$logDir\web-error.log" `

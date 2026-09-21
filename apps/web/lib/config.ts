@@ -1,10 +1,12 @@
 const nodeEnv = process.env.NODE_ENV ?? 'development';
+const environment = process.env.NEXT_PUBLIC_APP_ENV ?? process.env.APP_ENV ?? nodeEnv;
 const isProduction = nodeEnv === 'production';
 const apiUrl = (process.env.NEXT_PUBLIC_API_URL ?? (isProduction ? '' : 'http://localhost:3100')).replace(/\/$/, '');
 if (isProduction && !apiUrl) throw new Error('NEXT_PUBLIC_API_URL is required in production');
 
 export const webConfig = {
   nodeEnv,
+  environment,
   isProduction,
   apiUrl,
   apiBasePath: (process.env.NEXT_PUBLIC_API_BASE_PATH ?? '/api/v1').replace(/^\/?/, '/').replace(/\/$/, ''),
