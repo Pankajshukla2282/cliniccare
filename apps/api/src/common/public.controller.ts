@@ -54,7 +54,7 @@ export class PublicController {
   async getDoctor(@Param('id', ParseIntPipe) id: number, @Query('tenant') tenant?: string, @Query('organizationId') organizationId?: string) {
     const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
     return this.prisma.doctor.findFirst({
-      where: { id, status: 'ACTIVE', clinic: { organizationId } },
+      where: { id, status: 'ACTIVE', clinic: { organizationId: orgId } },
       include: {
         user: { select: { firstName: true, lastName: true, email: true, phone: true } },
         specialties: { include: { specialty: true } },

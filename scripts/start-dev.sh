@@ -31,9 +31,19 @@ WEB_HOST="${WEB_HOST:-127.0.0.1}"
 WEB_PORT="${WEB_PORT:-3000}"
 POSTGRES_LOCAL_PORT="${POSTGRES_LOCAL_PORT:-5432}"
 DEV_INFRA_MODE="${DEV_INFRA_MODE:-auto}"
-K8S_NAMESPACE="${K8S_NAMESPACE:-cliniccare}"
+if [[ -z "${K8S_NAMESPACE:-}" ]]; then
+  case "${APP_ENV:-development}" in
+    development) K8S_NAMESPACE="cliniccare-development" ;;
+    staging) K8S_NAMESPACE="cliniccare-staging" ;;
+    production) K8S_NAMESPACE="cliniccare-production" ;;
+    *) K8S_NAMESPACE="cliniccare-${APP_ENV:-development}" ;;
+  esac
+fi
 POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
-API_HEALTH_PATH="${API_HEALTH_PATH:-/healthz}"
+API_BASE_PATH="/${API_BASE_PATH:-api/v1}"
+API_BASE_PATH="/${API_BASE_PATH#/}"
+API_BASE_PATH="${API_BASE_PATH%/}"
+API_HEALTH_PATH="${API_HEALTH_PATH:-${API_BASE_PATH}/healthz}"
 WEB_HEALTH_PATH="${WEB_HEALTH_PATH:-/healthz}"
 API_URL="${API_URL:-http://127.0.0.1:${API_PORT}}"
 
@@ -96,7 +106,16 @@ fi
 if [[ "$USE_K8S" -eq 1 ]]; then
   command -v kubectl >/dev/null 2>&1 || { echo "[ERROR] kubectl is required when DEV_INFRA_MODE=k8s."; exit 1; }
   kubectl cluster-info >/dev/null 2>&1 || { echo "[ERROR] Kubernetes is not reachable."; exit 1; }
-  kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1 || { echo "[ERROR] Namespace '$K8S_NAMESPACE' does not exist."; exit 1; }
+  if ! kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1; then
+    echo "[ERROR] Namespace '$K8S_NAMESPACE' does not exist."
+    case "${APP_ENV:-development}" in
+      development) echo "Create/deploy it with: kubectl kustomize infrastructure/k8s/overlays/development --load-restrictor LoadRestrictionsNone | kubectl apply -f -" ;;
+      staging) echo "Create/deploy it with: kubectl kustomize infrastructure/k8s/overlays/staging --load-restrictor LoadRestrictionsNone | kubectl apply -f -" ;;
+      production) echo "Create/deploy it with: kubectl kustomize infrastructure/k8s/overlays/prod --load-restrictor LoadRestrictionsNone | kubectl apply -f -" ;;
+    esac
+    kubectl get namespaces
+    exit 1
+  fi
   kubectl get svc "$POSTGRES_SERVICE" -n "$K8S_NAMESPACE" >/dev/null 2>&1 || { echo "[ERROR] Service '$POSTGRES_SERVICE' does not exist."; exit 1; }
 fi
 

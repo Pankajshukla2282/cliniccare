@@ -14,6 +14,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const raw = exception instanceof HttpException ? exception.getResponse() : undefined;
     const message = typeof raw === 'object' && raw && 'message' in raw ? (raw as {message: unknown}).message : (raw ?? 'Internal server error');
     const errorCode = status >= 500 ? 'INTERNAL_ERROR' : `HTTP_${status}`;
+    if (status >= 500) console.error('[API] unhandled request error', exception);
     res.status(status).json({ statusCode: status, errorCode, message, requestId, timestamp: new Date().toISOString(), path: req.originalUrl });
   }
 }

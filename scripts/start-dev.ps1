@@ -74,10 +74,18 @@ $WebHost = if ($env:WEB_HOST) { $env:WEB_HOST } else { '127.0.0.1' }
 $WebPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 3000 }
 $PostgresLocalPort = if ($env:POSTGRES_LOCAL_PORT) { [int]$env:POSTGRES_LOCAL_PORT } else { 5432 }
 $AppEnvironment = if ($env:APP_ENV) { $env:APP_ENV } else { 'development' }
-$K8sNamespace = if ($env:K8S_NAMESPACE) { $env:K8S_NAMESPACE } else { "cliniccare-$AppEnvironment" }
+
+$DefaultK8sNamespace = switch ($AppEnvironment) {
+    'development' { 'cliniccare-development' }
+    'staging' { 'cliniccare-staging' }
+    'production' { 'cliniccare-production' }
+    default { "cliniccare-$AppEnvironment" }
+}
+$K8sNamespace = if ($env:K8S_NAMESPACE) { $env:K8S_NAMESPACE } else { $DefaultK8sNamespace }
 $InfraMode = if ($env:DEV_INFRA_MODE) { ($env:DEV_INFRA_MODE).ToLowerInvariant() } else { 'auto' }
 $PostgresService = if ($env:POSTGRES_SERVICE) { $env:POSTGRES_SERVICE } else { 'postgres' }
-$ApiHealthPath = if ($env:API_HEALTH_PATH) { $env:API_HEALTH_PATH } else { '/healthz' }
+$ApiBasePath = if ($env:API_BASE_PATH) { "/$($env:API_BASE_PATH.Trim('/'))" } else { '/api/v1' }
+$ApiHealthPath = if ($env:API_HEALTH_PATH) { $env:API_HEALTH_PATH } else { "$ApiBasePath/healthz" }
 $WebHealthPath = if ($env:WEB_HEALTH_PATH) { $env:WEB_HEALTH_PATH } else { '/healthz' }
 $ApiUrl = if ($env:API_URL) { $env:API_URL } else { "http://localhost:$ApiPort" }
 
@@ -167,12 +175,17 @@ if ($UseK8s) {
 # 4. Namespace
 # ============================================================
 
-Write-Host "[CHECK] Checking cliniccare namespace..."
+Write-Host "[CHECK] Checking Kubernetes namespace '$K8sNamespace'..."
 
 kubectl get namespace $K8sNamespace *> $null
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "[ERROR] Namespace '$K8sNamespace' does not exist." -ForegroundColor Red
+    Write-Host "Create/deploy the environment first with:" -ForegroundColor Yellow
+    if ($AppEnvironment -eq 'development') { Write-Host "  kubectl kustomize .\infrastructure\k8s\overlays\development --load-restrictor LoadRestrictionsNone | kubectl apply -f -" -ForegroundColor Yellow }
+    elseif ($AppEnvironment -eq 'staging') { Write-Host "  kubectl kustomize .\infrastructure\k8s\overlays\staging --load-restrictor LoadRestrictionsNone | kubectl apply -f -" -ForegroundColor Yellow }
+    elseif ($AppEnvironment -eq 'production') { Write-Host "  kubectl kustomize .\infrastructure\k8s\overlays\prod --load-restrictor LoadRestrictionsNone | kubectl apply -f -" -ForegroundColor Yellow }
+    Write-Host "Available namespaces:"
     kubectl get namespaces
     exit 1
 }

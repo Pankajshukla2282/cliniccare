@@ -253,3 +253,8 @@ ClinicCare has explicit isolation boundaries:
 Protected API requests may select context with `X-Tenant-Slug` and `X-Clinic-Id`. The server validates membership, tenant lifecycle, clinic ownership and role assignments before calculating effective permissions.
 
 See [`docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md`](docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md) and [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md) for the complete model.
+
+
+## Kubernetes environment namespaces
+
+Development, staging and production use isolated namespaces: `cliniccare-development`, `cliniccare-staging`, and `cliniccare-production`. The launcher derives the namespace from `APP_ENV` unless `K8S_NAMESPACE` is explicitly set.

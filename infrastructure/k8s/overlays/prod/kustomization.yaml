@@ -14,7 +14,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: cliniccare
+namespace: cliniccare-production
 
 resources:
   - ../../base
@@ -55,3 +55,10 @@ patches:
       - op: replace
         path: /data/WEB_ORIGIN
         value: https://web.cliniccare.example
+  - target:
+      kind: Namespace
+      name: cliniccare
+    patch: |-
+      - op: replace
+        path: /metadata/name
+        value: cliniccare-production

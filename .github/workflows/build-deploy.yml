@@ -82,11 +82,24 @@ jobs:
         with:
           version: latest
 
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
       - name: Render overlay with image tag
         run: |
+          # The base generator needs a local env file to render. Use only the
+          # non-production template here; production Secrets are managed out
+          # of band and must never be embedded in the release artifact.
+          cp .env.example .env
           kubectl kustomize infrastructure/k8s/overlays/prod --load-restrictor LoadRestrictionsNone \
             | sed "s/__IMAGE_TAG__/${{ needs.build-and-push.outputs.tag }}/g" \
             > cliniccare-prod.yaml
+          yq eval 'select(.kind != "Secret")' cliniccare-prod.yaml > cliniccare-prod-no-secrets.yaml
+          mv cliniccare-prod-no-secrets.yaml cliniccare-prod.yaml
+          rm -f .env
 
       - uses: actions/upload-artifact@v4
         with:
@@ -97,22 +110,40 @@ jobs:
     name: Deploy (optional)
     runs-on: ubuntu-latest
     needs: render
-    if: ${{ secrets.KUBE_CONFIG_B64 != '' }}
     steps:
+      - name: Check deployment configuration
+        id: gate
+        env:
+          KUBE_CONFIG_B64: ${{ secrets.KUBE_CONFIG_B64 }}
+        run: |
+          if [ -n "$KUBE_CONFIG_B64" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "KUBE_CONFIG_B64 is not configured; deployment skipped."
+          fi
+
       - uses: actions/download-artifact@v4
+        if: steps.gate.outputs.enabled == 'true'
         with:
           name: cliniccare-prod
 
       - name: Configure kubectl
+        if: steps.gate.outputs.enabled == 'true'
         run: |
           mkdir -p ~/.kube
           echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 -d > ~/.kube/config
           chmod 600 ~/.kube/config
 
       - name: Apply manifests
-        run: kubectl apply -f cliniccare-prod.yaml
+        if: steps.gate.outputs.enabled == 'true'
+        run: |
+          kubectl -n cliniccare-production get secret api-secrets
+          kubectl -n cliniccare-production get secret postgres-credentials
+          kubectl apply -f cliniccare-prod.yaml
 
       - name: Wait for rollout
+        if: steps.gate.outputs.enabled == 'true'
         run: |
-          kubectl -n cliniccare rollout status deploy/api --timeout=300s
-          kubectl -n cliniccare rollout status deploy/web --timeout=300s
+          kubectl -n cliniccare-production rollout status deploy/api --timeout=300s
+          kubectl -n cliniccare-production rollout status deploy/web --timeout=300s

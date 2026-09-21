@@ -12,7 +12,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "prisma:validate": "prisma validate",
-    "typecheck:api": "tsc -p apps/api/tsconfig.json --noEmit",
+    "typecheck:api": "npm run db:generate && tsc -p apps/api/tsconfig.json --noEmit",
     "typecheck:web": "tsc -p apps/web/tsconfig.json --noEmit",
     "build:api": "npm run build --workspace=@cliniccare/api",
     "build:web": "npm run build --workspace=@cliniccare/web",
@@ -42,9 +42,7 @@
     "eslint": "9.39.5",
     "prisma": "7.10.0",
     "tsx": "^4.19.0",
-    "typescript": "7.0.2",
-    "@types/bcryptjs": "^2.4.6",
-    "@types/express": "^5.0.6"
+    "typescript": "7.0.2"
   },
   "engines": {
     "node": "24.21.0",

@@ -4,11 +4,21 @@
 
 | Environment | APP_ENV | Namespace | Database | Web | API |
 |---|---|---|---|---|---|
-| Development | `development` | `cliniccare-dev` | dedicated dev DB | local/Dev host | local/Dev host |
+| Development | `development` | `cliniccare-development` | dedicated dev DB | local/Dev host | local/Dev host |
 | Staging | `staging` | `cliniccare-staging` | dedicated staging DB | staging host | staging API |
-| Production | `production` | `cliniccare-prod` | dedicated production DB | production host | production API |
+| Production | `production` | `cliniccare-production` | dedicated production DB | production host | production API |
 
 Environment names are configuration boundaries. They are not tenant IDs.
+
+## Kubernetes overlays
+
+Each deployment environment has its own Kubernetes namespace and Kustomize overlay:
+
+- `infrastructure/k8s/overlays/development` → `cliniccare-development`
+- `infrastructure/k8s/overlays/staging` → `cliniccare-staging`
+- `infrastructure/k8s/overlays/prod` → `cliniccare-production`
+
+Do not use the legacy generic `cliniccare` namespace for environment deployments.
 
 ## Local development
 

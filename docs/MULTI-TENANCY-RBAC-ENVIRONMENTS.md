@@ -30,9 +30,9 @@ Tenant (Organization)
 
 Recommended namespaces:
 
-- `cliniccare-dev`
+- `cliniccare-development`
 - `cliniccare-staging`
-- `cliniccare-prod`
+- `cliniccare-production`
 
 Never point staging or production at the development database.
 
@@ -121,3 +121,14 @@ Tenant switching does not change the idempotency namespace of another tenant.
 5. Public routes resolve tenant by active slug.
 6. Keep environment databases and secrets separate.
 7. Never commit `.env` or generated build directories.
+
+
+## Kubernetes namespace mapping
+
+| APP_ENV | Kubernetes namespace | Kustomize overlay |
+|---|---|---|
+| `development` | `cliniccare-development` | `infrastructure/k8s/overlays/development` |
+| `staging` | `cliniccare-staging` | `infrastructure/k8s/overlays/staging` |
+| `production` | `cliniccare-production` | `infrastructure/k8s/overlays/prod` |
+
+The legacy generic `cliniccare` namespace is not used by environment deployments.
