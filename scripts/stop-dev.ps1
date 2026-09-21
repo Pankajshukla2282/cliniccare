@@ -29,6 +29,8 @@ $NodeProcesses = Get-CimInstance Win32_Process |
             $_.CommandLine -like "*dist\main.js*" -or
             $_.CommandLine -like "*dist/main.js*" -or
             $_.CommandLine -like "*apps/web*" -or
+            $_.CommandLine -like "*apps\api*" -or
+            $_.CommandLine -like "*tsx*watch*src\main.ts*" -or
             $_.CommandLine -like "*next*"
         )
     }
@@ -64,7 +66,7 @@ foreach ($Process in $NpmProcesses) {
 }
 
 # ============================================================
-# 3. Stop kubectl port-forwards
+# 3. Stop PostgreSQL kubectl port-forward (if the dev launcher owns it)
 # ============================================================
 
 Write-Host "[CHECK] Looking for kubectl port-forwards..."

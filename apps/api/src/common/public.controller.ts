@@ -2,6 +2,7 @@ import { Controller, Get, NotFoundException, Param, ParseIntPipe, Query } from '
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators';
 import { PrismaService } from '../prisma/prisma.service';
+import { resolvePublicOrganizationId } from './tenant';
 
 @ApiTags('public')
 @Controller()
@@ -33,11 +34,12 @@ export class PublicController {
 
   @Public()
   @Get('public/doctors')
-  async listDoctors(@Query('organizationId', ParseIntPipe) organizationId: number) {
+  async listDoctors(@Query('tenant') tenant?: string, @Query('organizationId') organizationId?: string) {
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
     return this.prisma.doctor.findMany({
       where: {
         status: 'ACTIVE',
-        clinic: { organizationId },
+        clinic: { organizationId: orgId },
       },
       include: {
         user: { select: { firstName: true, lastName: true, email: true } },
@@ -49,7 +51,8 @@ export class PublicController {
 
   @Public()
   @Get('public/doctors/:id')
-  async getDoctor(@Param('id', ParseIntPipe) id: number, @Query('organizationId', ParseIntPipe) organizationId: number) {
+  async getDoctor(@Param('id', ParseIntPipe) id: number, @Query('tenant') tenant?: string, @Query('organizationId') organizationId?: string) {
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
     return this.prisma.doctor.findFirst({
       where: { id, status: 'ACTIVE', clinic: { organizationId } },
       include: {
@@ -64,11 +67,12 @@ export class PublicController {
 
   @Public()
   @Get('public/services')
-  async listServices(@Query('organizationId', ParseIntPipe) organizationId: number) {
+  async listServices(@Query('tenant') tenant?: string, @Query('organizationId') organizationId?: string) {
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
     return this.prisma.service.findMany({
       where: {
         status: 'ACTIVE',
-        organizationId,
+        organizationId: orgId,
       },
       include: { category: true },
       orderBy: { name: 'asc' },
@@ -77,11 +81,12 @@ export class PublicController {
 
   @Public()
   @Get('public/testimonials')
-  async listTestimonials(@Query('organizationId', ParseIntPipe) organizationId: number) {
+  async listTestimonials(@Query('tenant') tenant?: string, @Query('organizationId') organizationId?: string) {
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
     return this.prisma.review.findMany({
       where: {
         status: 'APPROVED',
-        patient: { organizationId },
+        patient: { organizationId: orgId },
       },
       include: {
         patient: { include: { user: { select: { firstName: true, lastName: true } } } },
@@ -101,11 +106,12 @@ export class PublicController {
 
   @Public()
   @Get('public/packages')
-  async listPackages(@Query('organizationId', ParseIntPipe) organizationId: number) {
+  async listPackages(@Query('tenant') tenant?: string, @Query('organizationId') organizationId?: string) {
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
     return this.prisma.package.findMany({
       where: {
         status: 'ACTIVE',
-        organizationId,
+        organizationId: orgId,
       },
       orderBy: { name: 'asc' },
     });

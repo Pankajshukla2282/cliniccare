@@ -120,7 +120,7 @@ export class TenantAccessGuard implements CanActivate {
 
     req.user = {
       ...req.user, sub: user.id, email: user.email, organizationId, clinicId, role: [...roles][0],
-      permissions: rolePermissions.map((entry) => entry.permission), tenantSlug, roles: [...roles],
+      permissions: rolePermissions.map((entry) => entry.permission), tenantSlug, roles: [...roles], environment: process.env.APP_ENV ?? process.env.NODE_ENV ?? 'development',
     };
     return true;
   }

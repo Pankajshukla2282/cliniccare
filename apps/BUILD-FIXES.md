@@ -31,3 +31,12 @@ tenant data.
 
 The web application now communicates with the API instead of importing Prisma
 directly, so Prisma/database runtime code stays inside `apps/api`.
+
+## 2026-09-22 multi-tenant/environment cleanup
+
+- API now uses the official `bcryptjs` declarations through the root workspace; the custom `bcryptjs.d.ts` shim was removed.
+- Express type definitions are centralized on `@types/express` 5.x at the workspace root; the conflicting API-local Express 4 types were removed.
+- Public tenant-aware endpoints resolve the tenant from a slug instead of trusting a raw organization ID as the primary context.
+- The development launchers treat Kubernetes as optional and no longer require Redis, because the current API does not use a Redis runtime dependency.
+- Seed data is idempotent, avoids hard-coded clinic IDs, creates representative RBAC/staff/patient/catalog data, and demonstrates one user belonging to two tenants.
+- Environment configuration is explicit through `APP_ENV`, `DEPLOYMENT_NAMESPACE`, and environment-specific tenant slugs.

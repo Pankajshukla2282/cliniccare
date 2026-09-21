@@ -2,12 +2,14 @@ import { Body, Controller, Get, Param, ParseIntPipe, Post, Query } from '@nestjs
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { OrgId, Permissions, Public } from '../common/decorators';
 import { CmsService } from './cms.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { resolvePublicOrganizationId } from '../common/tenant';
 import { FaqDto, UpsertPageDto } from './dto';
 
 @ApiTags('cms')
 @Controller()
 export class CmsController {
-  constructor(private readonly cms: CmsService) {}
+  constructor(private readonly cms: CmsService, private readonly prisma: PrismaService) {}
 
   @Permissions('content.manage')
   @Post('cms/pages')
@@ -25,8 +27,9 @@ export class CmsController {
 
   @Public()
   @Get('pages/:slug')
-  getBySlug(@Query('organizationId', ParseIntPipe) organizationId: number, @Param('slug') slug: string) {
-    return this.cms.getBySlug(organizationId, slug);
+  async getBySlug(@Query('tenant') tenant: string | undefined, @Query('organizationId') organizationId: string | undefined, @Param('slug') slug: string) {
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
+    return this.cms.getBySlug(orgId, slug);
   }
 
   @Permissions('content.read')
@@ -48,7 +51,8 @@ export class CmsController {
 
   @Public()
   @Get('faqs')
-  listFaqs(@Query('organizationId', ParseIntPipe) organizationId: number) {
-    return this.cms.listFaqs(organizationId);
+  async listFaqs(@Query('tenant') tenant?: string, @Query('organizationId') organizationId?: string) {
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
+    return this.cms.listFaqs(orgId);
   }
 }

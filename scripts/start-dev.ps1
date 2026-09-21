@@ -73,11 +73,10 @@ $ApiPort = if ($env:API_PORT) { [int]$env:API_PORT } else { 3100 }
 $WebHost = if ($env:WEB_HOST) { $env:WEB_HOST } else { '127.0.0.1' }
 $WebPort = if ($env:WEB_PORT) { [int]$env:WEB_PORT } else { 3000 }
 $PostgresLocalPort = if ($env:POSTGRES_LOCAL_PORT) { [int]$env:POSTGRES_LOCAL_PORT } else { 5432 }
-$RedisLocalPort = if ($env:REDIS_LOCAL_PORT) { [int]$env:REDIS_LOCAL_PORT } else { 6379 }
-$K8sNamespace = if ($env:K8S_NAMESPACE) { $env:K8S_NAMESPACE } else { 'cliniccare' }
+$AppEnvironment = if ($env:APP_ENV) { $env:APP_ENV } else { 'development' }
+$K8sNamespace = if ($env:K8S_NAMESPACE) { $env:K8S_NAMESPACE } else { "cliniccare-$AppEnvironment" }
 $InfraMode = if ($env:DEV_INFRA_MODE) { ($env:DEV_INFRA_MODE).ToLowerInvariant() } else { 'auto' }
 $PostgresService = if ($env:POSTGRES_SERVICE) { $env:POSTGRES_SERVICE } else { 'postgres' }
-$RedisService = if ($env:REDIS_SERVICE) { $env:REDIS_SERVICE } else { 'redis' }
 $ApiHealthPath = if ($env:API_HEALTH_PATH) { $env:API_HEALTH_PATH } else { '/healthz' }
 $WebHealthPath = if ($env:WEB_HEALTH_PATH) { $env:WEB_HEALTH_PATH } else { '/healthz' }
 $ApiUrl = if ($env:API_URL) { $env:API_URL } else { "http://localhost:$ApiPort" }
@@ -85,7 +84,7 @@ $ApiUrl = if ($env:API_URL) { $env:API_URL } else { "http://localhost:$ApiPort" 
 Write-Host "[CONFIG] API   : $ApiHost`:$ApiPort"
 Write-Host "[CONFIG] Web   : $WebHost`:$WebPort"
 Write-Host "[CONFIG] DB    : localhost`:$PostgresLocalPort"
-Write-Host "[CONFIG] Redis : localhost`:$RedisLocalPort"
+Write-Host "[CONFIG] Env   : $AppEnvironment"
 Write-Host "[CONFIG] K8s   : $K8sNamespace"
 Write-Host "[CONFIG] Infra : $InfraMode (local | k8s | auto)"
 Write-Host ""
@@ -140,11 +139,11 @@ elseif ($InfraMode -eq 'auto') {
             Write-Host "[OK] Kubernetes cluster reachable; using Kubernetes services." -ForegroundColor Green
         }
         else {
-            Write-Host "[INFO] Kubernetes is not reachable; falling back to local PostgreSQL/Redis." -ForegroundColor Yellow
+            Write-Host "[INFO] Kubernetes is not reachable; using local PostgreSQL." -ForegroundColor Yellow
         }
     }
     else {
-        Write-Host "[INFO] kubectl not installed; using local PostgreSQL/Redis." -ForegroundColor Yellow
+        Write-Host "[INFO] kubectl not installed; using local PostgreSQL." -ForegroundColor Yellow
     }
 }
 
@@ -195,16 +194,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-kubectl get svc $RedisService -n $K8sNamespace *> $null
-
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[ERROR] Service '$RedisService' does not exist." -ForegroundColor Red
-    kubectl get svc -n $K8sNamespace
-    exit 1
-}
-
 Write-Host "[OK] $PostgresService service exists." -ForegroundColor Green
-Write-Host "[OK] $RedisService service exists." -ForegroundColor Green
 Write-Host ""
 
 # ============================================================
@@ -329,75 +319,6 @@ else {
 
         Write-Host "-------------------------------------"
 
-        exit 1
-    }
-}
-
-# ============================================================
-# 9. Start Redis port-forward
-# ============================================================
-
-$RedisProcess = $null
-
-Write-Host ""
-Write-Host "[INFO] Redis localhost:$RedisLocalPort"
-
-if (Test-Port $RedisLocalPort) {
-    Write-Host "[OK] localhost:$RedisLocalPort already open." -ForegroundColor Green
-}
-elseif (-not $UseK8s) {
-    Write-Host "[ERROR] Redis is not listening on localhost:$RedisLocalPort." -ForegroundColor Red
-    Write-Host "Start Redis locally or set DEV_INFRA_MODE=k8s with a reachable cluster."
-    exit 1
-}
-else {
-    Write-Host "[START] Starting Redis port-forward..."
-
-    $RedisProcess = Start-Process `
-        -FilePath "kubectl.exe" `
-        -ArgumentList @(
-            "port-forward",
-            "-n",
-            "$K8sNamespace",
-            "svc/$RedisService",
-            "$RedisLocalPort`:6379"
-        ) `
-        -RedirectStandardOutput "$logDir\redis-port-forward.log" `
-        -RedirectStandardError "$logDir\redis-port-forward-error.log" `
-        -PassThru `
-        -WindowStyle Hidden
-
-    Write-Host "   kubectl PID: $($RedisProcess.Id)"
-
-    $RedisReady = $false
-
-    for ($i = 1; $i -le 30; $i++) {
-
-        Start-Sleep -Seconds 1
-
-        if ($RedisProcess.HasExited) {
-            Write-Host "[ERROR] Redis port-forward exited." -ForegroundColor Red
-
-            Write-Host ""
-            Write-Host "----- Redis kubectl error -----" -ForegroundColor Yellow
-
-            if (Test-Path "$logDir\redis-port-forward-error.log") {
-                Get-Content "$logDir\redis-port-forward-error.log"
-            }
-
-            Write-Host "-------------------------------"
-            exit 1
-        }
-
-        if (Test-Port $RedisLocalPort) {
-            Write-Host "[OK] Redis available on localhost:$RedisLocalPort" -ForegroundColor Green
-            $RedisReady = $true
-            break
-        }
-    }
-
-    if (-not $RedisReady) {
-        Write-Host "[ERROR] Redis did not become available after 30 seconds." -ForegroundColor Red
         exit 1
     }
 }
@@ -604,7 +525,6 @@ Write-Host "   ClinicCare local environment is running    " -ForegroundColor Gre
 Write-Host "==============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "PostgreSQL : localhost:$PostgresLocalPort"
-Write-Host "Redis      : localhost:$RedisLocalPort"
 Write-Host "API        : $ApiUrl"
 Write-Host "Web        : http://localhost:$WebPort"
 Write-Host "API health : $ApiUrl$ApiHealthPath"
@@ -623,10 +543,6 @@ try {
         # Detect unexpectedly terminated processes
         if ($PostgresProcess -and $PostgresProcess.HasExited) {
             Write-Host "[WARN] PostgreSQL port-forward stopped." -ForegroundColor Yellow
-        }
-
-        if ($RedisProcess -and $RedisProcess.HasExited) {
-            Write-Host "[WARN] Redis port-forward stopped." -ForegroundColor Yellow
         }
 
         if ($ApiProcess -and $ApiProcess.HasExited) {
@@ -653,10 +569,6 @@ finally {
 
     if ($PostgresProcess -and -not $PostgresProcess.HasExited) {
         Stop-Process -Id $PostgresProcess.Id -Force -ErrorAction SilentlyContinue
-    }
-
-    if ($RedisProcess -and -not $RedisProcess.HasExited) {
-        Stop-Process -Id $RedisProcess.Id -Force -ErrorAction SilentlyContinue
     }
 
     Write-Host "[OK] ClinicCare stopped." -ForegroundColor Green

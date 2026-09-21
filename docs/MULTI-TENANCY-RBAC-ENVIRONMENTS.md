@@ -1,170 +1,123 @@
-# ClinicCare — Multi-Tenancy, Environments and RBAC
+# ClinicCare Multi-Tenancy, Environments and RBAC
 
-## 1. Architecture at a glance
+## Isolation model
 
-```text
-                         ClinicCare Platform
-                                  |
-             +--------------------+--------------------+
-             |                    |                    |
-        Development             Staging             Production
-        DB/Redis/Secrets        isolated            isolated
-             |                    |                    |
-       +-----+-----+        +-----+-----+        +-----+-----+
-       | Tenant A  |        | Tenant A  |        | Tenant A  |
-       | Tenant B  |        | Tenant B  |        | Tenant B  |
-       +-----+-----+        +-----+-----+        +-----+-----+
-             |
-       OrganizationMembership
-             |
-       UserRole (org/clinic scoped)
-             |
-       Effective Permissions
-```
-
-## 2. Three separate concepts
-
-| Concept | Boundary | Example |
-|---|---|---|
-| Environment | Infrastructure/deployment | development, staging, production |
-| Tenant | Business/data | ClinicCare Demo Organization |
-| Clinic | Operational scope inside a tenant | Main Clinic |
-| User role | Authorization | Doctor, Nurse, Accountant |
-
-These must not be conflated. A tenant slug is not an environment name, and a clinic is not a tenant.
-
-## 3. Tenant isolation
-
-`Organization` is the tenant root. API services use the authenticated request's organization context. The client cannot override it simply by putting another `organizationId` in a DTO.
-
-The request context is established by `TenantAccessGuard` (and the Prisma schema keeps the two clinic relationships distinct):
+ClinicCare has three independent boundaries:
 
 ```text
-JWT subject
-  -> active user
-  -> requested X-Tenant-Slug
-  -> OrganizationMembership validation
-  -> requested X-Clinic-Id validation
-  -> scoped UserRole lookup
-  -> RolePermission lookup
-  -> effective RequestUser
+Deployment environment
+  development | staging | production
+          |
+          +-- isolated infrastructure / secrets / database
+          |
+          v
+Tenant (Organization)
+          |
+          +-- Clinic(s)
+          +-- Patients
+          +-- Services / Products / Orders / Clinical records / CMS
+          |
+          +-- OrganizationMembership
+          |      user <-> tenant
+          |
+          +-- UserRole
+                 organization scope OR clinic scope
 ```
 
-For platform administration, `SUPER_ADMIN` may switch to an active/trial tenant for tenant lifecycle operations.
+### Environment
 
-## 4. User membership model
+`APP_ENV` identifies the deployment environment. Environment isolation is infrastructure-level, not a row column on every clinical table. Each environment should use its own PostgreSQL database, object-storage prefix/bucket, secrets, Redis/job infrastructure, hostnames and Kubernetes namespace.
 
-A single user account can belong to more than one tenant:
+Recommended namespaces:
+
+- `cliniccare-dev`
+- `cliniccare-staging`
+- `cliniccare-prod`
+
+Never point staging or production at the development database.
+
+### Tenant
+
+`Organization` is the tenant boundary. Tenant-owned records carry `organizationId` directly or are reached through a tenant-owned parent such as `Patient`, `Clinic`, `Order` or `Doctor.clinic`.
+
+Authenticated requests use:
+
+- `X-Tenant-Slug` — requested tenant context
+- `X-Clinic-Id` — optional clinic context
+
+`TenantAccessGuard` verifies the user is active, the tenant is active/trial, the membership exists, the clinic belongs to that tenant, and the user's role assignments apply to that scope.
+
+### Memberships
+
+`OrganizationMembership` answers **which tenants a user may access**. A user may have memberships in many organizations.
+
+The user's `organizationId` remains the home/default organization for compatibility. It is not a substitute for membership authorization.
+
+### Roles
+
+`UserRole` answers **what the user may do** and can be:
+
+- organization scoped: `organizationId != null, clinicId = null`
+- clinic scoped: `organizationId != null, clinicId != null`
+- platform scoped: `SUPER_ADMIN`, with global permission rows where appropriate
+
+`scopeKey` is the idempotent natural key used by the seed and RBAC services.
+
+### Permissions
+
+`RolePermission` contains platform defaults (`organizationId = null`) and optional tenant overrides. Effective permissions are calculated for the active tenant/clinic on every protected request.
+
+A JWT is a credential only. Tenant lifecycle and role membership are revalidated against PostgreSQL on each protected request.
+
+## Public tenant context
+
+Public tenant routes must use the tenant slug as the canonical context:
 
 ```text
-User
- ├── home organization (legacy/default)
- └── OrganizationMembership[]
-       ├── Organization A + default clinic
-       └── Organization B + default clinic
+GET /api/v1/public/doctors?tenant=cliniccare-demo
+GET /api/v1/public/services?tenant=cliniccare-demo
+GET /api/v1/public/packages?tenant=cliniccare-demo
+GET /api/v1/reviews/published?tenant=cliniccare-demo
+GET /api/v1/pages/faq?tenant=cliniccare-demo
+GET /api/v1/faqs?tenant=cliniccare-demo
+GET /api/v1/appointments/slots?tenant=cliniccare-demo&doctorId=1&date=2026-09-25
 ```
 
-Membership status is independently managed. An inactive membership does not authorize tenant access.
+A legacy `organizationId` query parameter remains accepted temporarily for existing clients, but new clients should always use `tenant`.
 
-## 5. Role model
+## Environment-aware seed
 
-Roles are additive. `User.primaryRole` supplies the backward-compatible home role, while `UserRole` stores explicit scoped assignments.
+The seed is idempotent and never depends on hard-coded clinic IDs. Use:
 
-```text
-SUPER_ADMIN                 platform/global
-ADMIN                       organization
-CLINIC_ADMIN                organization or clinic
-DOCTOR                      organization or clinic
-RECEPTIONIST                organization or clinic
-NURSE                       organization or clinic
-PHARMACIST                  organization or clinic
-ACCOUNTANT                  organization or clinic
-CONTENT_MANAGER             organization
-PATIENT                     organization
+```powershell
+$env:APP_ENV='development'
+$env:SEED_TENANT_SLUG='cliniccare-demo'
+npm run db:seed
 ```
 
-A tenant administrator cannot grant `SUPER_ADMIN`. Platform administration is required for that role.
+For staging/demo data:
 
-## 6. Permission model
-
-`RolePermission` has two levels:
-
-- platform default: `organizationId = NULL`
-- tenant override: `organizationId = <tenant id>`
-
-Tenant-specific permission rows override the platform default for the same role/permission pair.
-
-The effective set is calculated for the active tenant and role assignments. Permission changes are therefore visible without waiting for a new JWT.
-
-## 7. Environment management
-
-Every environment should have independent:
-
-- PostgreSQL database
-- Redis/cache
-- object storage
-- JWT/signing keys
-- encryption keys
-- API/web deployment
-- Kubernetes namespace
-- monitoring/logging destination
-- third-party credentials where applicable
-
-Promotion is a deployment operation, not a database-sharing operation:
-
-```text
-development -> CI validation -> staging -> approval -> production
+```powershell
+$env:APP_ENV='staging'
+$env:SEED_TENANT_SLUG='cliniccare-staging-demo'
+$env:SEED_ALLOW_DEMO='true'
+npm run db:seed
 ```
 
-Production records are never used as the development database.
+Demo seeding is blocked in production unless explicitly enabled.
 
-## 8. API headers
+## Idempotency
 
-Authenticated requests may select context with:
+State-changing operations marked with `@RequireIdempotency()` use an idempotency key associated with the authenticated user and active tenant. Retrying the same operation returns the existing result rather than creating a duplicate operation.
 
-```http
-X-Tenant-Slug: cliniccare-demo
-X-Clinic-Id: 42
-```
+Tenant switching does not change the idempotency namespace of another tenant.
 
-The server validates both values. Missing headers fall back to the user's home tenant/default clinic.
+## Security rules
 
-## 9. Idempotency
-
-State-changing operations requiring idempotency use:
-
-```http
-Idempotency-Key: appointment-create-<client-generated-unique-value>
-```
-
-The database uniqueness boundary includes the organization context. Failed operations release an incomplete reservation; successful operations retain the key until the configured TTL.
-
-## 10. Demo coverage
-
-The approval wireframe now exposes the model directly:
-
-- environment selector: development/staging/production
-- tenant selector: multiple demo organizations
-- clinic selector: clinic scope within the active tenant
-- role selector: acting role
-- user membership and role assignment screens
-- organization/clinic administration
-- tenant lifecycle information
-- environment isolation explanation
-- RBAC permission matrix
-- idempotency/audit view
-
-This makes the wireframe useful for demonstrating the same tenancy/access concepts implemented by the API rather than presenting unrelated static screens.
-
-## 11. Prisma relation naming
-
-`Clinic` and `OrganizationMembership` have one explicit relation for a member's default clinic:
-
-```text
-Clinic.defaultMemberships
-        <->
-OrganizationMembership.defaultClinic
-        @relation("ClinicDefaultMemberships")
-```
-
-There is intentionally no second `Clinic.memberships` relation. Membership itself belongs to an `Organization`; clinic-specific authorization belongs to `UserRole.clinicId`. This avoids Prisma P1012 ambiguous-relation validation errors and avoids adding a redundant foreign key to `organization_memberships`.
+1. Never accept a client-supplied tenant ID as authorization proof.
+2. Resolve authenticated tenant context from membership + `X-Tenant-Slug`.
+3. Validate `X-Clinic-Id` belongs to the active tenant.
+4. Never use `User.organizationId` alone to authorize a multi-tenant operation.
+5. Public routes resolve tenant by active slug.
+6. Keep environment databases and secrets separate.
+7. Never commit `.env` or generated build directories.

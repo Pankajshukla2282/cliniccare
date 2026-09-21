@@ -2,6 +2,8 @@ import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, OrgId, Permissions, Public, RequestUser } from '../common/decorators';
 import { EngagementService } from './engagement.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { resolvePublicOrganizationId } from '../common/tenant';
 import {
   CompleteFollowUpDto,
   CreateFollowUpDto,
@@ -14,7 +16,7 @@ import {
 @ApiTags('engagement')
 @Controller()
 export class EngagementController {
-  constructor(private readonly engagement: EngagementService) {}
+  constructor(private readonly engagement: EngagementService, private readonly prisma: PrismaService) {}
 
   @Permissions('followup.manage')
   @Post('follow-ups')
@@ -51,8 +53,9 @@ export class EngagementController {
 
   @Public()
   @Get('reviews/published')
-  published(@Query('organizationId', ParseIntPipe) organizationId: number, @Query('doctorId') doctorId?: string) {
-    return this.engagement.listReviews(organizationId, 'APPROVED', doctorId ? Number(doctorId) : undefined);
+  async published(@Query('tenant') tenant?: string, @Query('organizationId') organizationId?: string, @Query('doctorId') doctorId?: string) {
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
+    return this.engagement.listReviews(orgId, 'APPROVED', doctorId ? Number(doctorId) : undefined);
   }
 
   @Permissions('review.manage')

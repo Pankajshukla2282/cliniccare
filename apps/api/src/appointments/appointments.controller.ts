@@ -3,13 +3,15 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AppointmentStatus } from '../generated/prisma/client';
 import { CurrentUser, OrgId, Permissions, Public, RequestUser, RequireIdempotency } from '../common/decorators';
 import { AppointmentsService } from './appointments.service';
+import { PrismaService } from '../prisma/prisma.service';
+import { resolvePublicOrganizationId } from '../common/tenant';
 import { BookAppointmentDto, CancelAppointmentDto, RescheduleAppointmentDto, SlotQueryDto, UpdateAppointmentStatusDto } from './dto';
 
 @ApiTags('appointments')
 @ApiBearerAuth()
 @Controller('appointments')
 export class AppointmentsController {
-  constructor(private readonly appointments: AppointmentsService) {}
+  constructor(private readonly appointments: AppointmentsService, private readonly prisma: PrismaService) {}
 
   @Permissions('appointment.read')
   @Get()
@@ -72,12 +74,14 @@ export class AppointmentsController {
 
   @Public()
   @Get('slots')
-  availableSlots(
-    @Query('organizationId', ParseIntPipe) organizationId: number,
+  async availableSlots(
+    @Query('tenant') tenant: string | undefined,
+    @Query('organizationId') organizationId: string | undefined,
     @Query('doctorId') doctorId: string,
     @Query('date') date: string,
     @Query('serviceId') serviceId?: string,
   ) {
-    return this.appointments.availableSlots(organizationId, Number(doctorId), date, serviceId ? Number(serviceId) : undefined);
+    const orgId = await resolvePublicOrganizationId(this.prisma, tenant, organizationId ? Number(organizationId) : undefined);
+    return this.appointments.availableSlots(orgId, Number(doctorId), date, serviceId ? Number(serviceId) : undefined);
   }
 }

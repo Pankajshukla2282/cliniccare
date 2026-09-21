@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import { Role } from '../generated/prisma/client';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';

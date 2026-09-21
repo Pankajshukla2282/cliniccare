@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # ClinicCare cross-platform local development launcher.
-# Starts PostgreSQL/Redis via Kubernetes port-forward, then API + Next.js web.
+# Starts PostgreSQL via Kubernetes port-forward when needed, then API + Next.js web.
 # Usage: bash scripts/start-dev.sh
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,10 +31,8 @@ WEB_HOST="${WEB_HOST:-127.0.0.1}"
 WEB_PORT="${WEB_PORT:-3000}"
 POSTGRES_LOCAL_PORT="${POSTGRES_LOCAL_PORT:-5432}"
 DEV_INFRA_MODE="${DEV_INFRA_MODE:-auto}"
-REDIS_LOCAL_PORT="${REDIS_LOCAL_PORT:-6379}"
 K8S_NAMESPACE="${K8S_NAMESPACE:-cliniccare}"
 POSTGRES_SERVICE="${POSTGRES_SERVICE:-postgres}"
-REDIS_SERVICE="${REDIS_SERVICE:-redis}"
 API_HEALTH_PATH="${API_HEALTH_PATH:-/healthz}"
 WEB_HEALTH_PATH="${WEB_HEALTH_PATH:-/healthz}"
 API_URL="${API_URL:-http://127.0.0.1:${API_PORT}}"
@@ -81,6 +79,7 @@ echo " ClinicCare local development"
 echo "=============================================="
 echo "API : $API_URL"
 echo "Web : http://${WEB_HOST}:${WEB_PORT}"
+echo "Env : ${APP_ENV:-development}"
 echo "Infra: $DEV_INFRA_MODE (local | k8s | auto)"
 echo
 
@@ -91,7 +90,7 @@ elif [[ "$DEV_INFRA_MODE" == "auto" ]] && command -v kubectl >/dev/null 2>&1 && 
   USE_K8S=1
   echo "[OK] Kubernetes cluster reachable; using Kubernetes services."
 elif [[ "$DEV_INFRA_MODE" == "auto" ]]; then
-  echo "[INFO] Kubernetes is not reachable; falling back to local PostgreSQL/Redis."
+  echo "[INFO] Kubernetes is not reachable; using local PostgreSQL."
 fi
 
 if [[ "$USE_K8S" -eq 1 ]]; then
@@ -99,7 +98,6 @@ if [[ "$USE_K8S" -eq 1 ]]; then
   kubectl cluster-info >/dev/null 2>&1 || { echo "[ERROR] Kubernetes is not reachable."; exit 1; }
   kubectl get namespace "$K8S_NAMESPACE" >/dev/null 2>&1 || { echo "[ERROR] Namespace '$K8S_NAMESPACE' does not exist."; exit 1; }
   kubectl get svc "$POSTGRES_SERVICE" -n "$K8S_NAMESPACE" >/dev/null 2>&1 || { echo "[ERROR] Service '$POSTGRES_SERVICE' does not exist."; exit 1; }
-  kubectl get svc "$REDIS_SERVICE" -n "$K8S_NAMESPACE" >/dev/null 2>&1 || { echo "[ERROR] Service '$REDIS_SERVICE' does not exist."; exit 1; }
 fi
 
 start_forward() {
@@ -127,7 +125,6 @@ start_forward() {
 }
 
 start_forward "PostgreSQL" "$POSTGRES_LOCAL_PORT" "svc/$POSTGRES_SERVICE" "postgres-port-forward" 5432
-start_forward "Redis" "$REDIS_LOCAL_PORT" "svc/$REDIS_SERVICE" "redis-port-forward" 6379
 
 echo "[START] API"
 npm run dev --workspace=@cliniccare/api >"$LOG_DIR/api.log" 2>&1 &

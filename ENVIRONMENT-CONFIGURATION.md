@@ -46,3 +46,9 @@ Do not deploy committed `.env` files containing secrets. Inject:
 from the deployment secret manager.
 
 `NEXT_PUBLIC_*` values are not secrets and are bundled into browser code.
+
+## Tenant context
+
+Environment and tenant are deliberately separate. `APP_ENV` selects the deployment boundary; `X-Tenant-Slug` selects the active organization inside an authenticated environment. `X-Clinic-Id` optionally narrows the active tenant to a clinic. Public routes use the `tenant` slug query parameter.
+
+See `docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md` and `docs/ENVIRONMENTS.md`.

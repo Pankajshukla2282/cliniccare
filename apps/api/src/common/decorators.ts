@@ -18,6 +18,8 @@ export interface RequestUser {
   organizationId: number;
   clinicId?: number | null;
   tenantSlug?: string;
+  environment?: string;
+  roles?: string[];
 }
 
 export const CurrentUser = createParamDecorator(

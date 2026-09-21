@@ -15,7 +15,7 @@ board-in clinics without re-architecture.
 | Web             | Next.js 16 (App Router) + TypeScript + Tailwind, shadcn/ui design system, subdomain proxy, dark mode |
 | API             | NestJS + TypeScript, Prisma ORM, JWT auth, org-scoped RBAC |
 | Database        | PostgreSQL (Prisma; `organizationId` scoped)    |
-| Cache / Queue   | Redis + BullMQ                                  |
+| Optional infrastructure | Redis (reserved for future cache/jobs)              |
 | Files           | S3-compatible object storage                    |
 | Deploy          | Kubernetes only — no Docker Compose             |
 
@@ -69,10 +69,10 @@ Read it as four rings:
    `Reports`, `Notifications`, and `Cms` (FAQ/pages/redirects) sitting across
    the others.
 
-Cross-cutting rules: **every** query is `organizationId`-scoped, permissions
-are resolved per request from the caller's org, and composite unique keys
+Cross-cutting rules: tenant-owned operations are scoped to the active `organizationId`, permissions
+are resolved per request from the caller's active membership/clinic context, and composite unique keys
 (e.g. coupon `[organizationId, code]`, cms page `[organizationId, slug]`)
-enforce tenant linear- الأسsolation at the database. That is the whole
+enforce tenant isolation at the database. That is the whole
 "multi-tenant foundation" guarantee.
 
 ### In scope
@@ -112,6 +112,10 @@ enforce tenant linear- الأسsolation at the database. That is the whole
 
 ```
 cliniccare/
+├── docs/
+│   ├── MULTI-TENANCY-RBAC-ENVIRONMENTS.md
+│   ├── ENVIRONMENTS.md
+│   └── BUILD-AND-START.md
 ├── prisma/
 │   ├── schema.prisma      # 55+ models incl. SaaS fields, composite tenant-keys
 │   ├── seed.ts            # platform org + SUPER_ADMIN, demo tenant (brand settings), RBAC matrix — idempotent
@@ -130,18 +134,6 @@ Root scripts: `db:push`, `db:generate`, `db:studio`, `prisma:validate`,
 
 Planning set (BRD -> TDD -> SOW -> RFP, signed-off order):
 
-- [docs/brd.md](docs/brd.md) - business requirements (G1-G6, FR-1..16, RBAC)
-- [docs/technical-design.md](docs/technical-design.md) - technical design
-  (modules, 55-model schema, NFR-1..8)
-- [docs/sow.md](docs/sow.md) - statement of work (D1-D5, milestones)
-- [docs/rfp.md](docs/rfp.md) - request for proposal (evaluation matrix)
-- [`docs/diagrams/index.html`](docs/diagrams/index.html) — browsable
-  architecture diagrams (9 pages, Mermaid v11 via CDN, needs internet)
-- [`docs/architecture-diagrams.md`](docs/architecture-diagrams.md) — Mermaid
-  sources of truth (paste into VS Code preview or mermaid.live)
-- [`docs/architecture-diagrams.drawio`](docs/architecture-diagrams.drawio)
-  — editable diagrams.net source (5 pages)
-- [`docs/runbook-local.md`](docs/runbook-local.md) — deployment & local runbook
 
 ```powershell
 cd cliniccare
@@ -218,7 +210,7 @@ Sandbox sign-in (demo only — change before shared use):
 - `GET  /api/v1/rbac/...` — org-scoped roles/permissions
 - `POST /api/v1/tenants` (super-admin) — onboard/update/activate/suspend
 - Health checks: `GET /healthz` on both web (`:3000`) and API (`:3100`)
-- Public portal routes are org-scoped via required `organizationId`.
+- Public portal routes resolve the active tenant by `tenant` slug. A legacy `organizationId` query parameter remains temporarily supported for existing clients.
 
 ## Kubernetes
 
@@ -232,8 +224,11 @@ build (`cliniccare/api:<tag>` / `cliniccare/web:<tag>`).
 - [x] Monorepo skeleton + prisma schema (40 models, validated)
 - [x] Auth: login / register / refresh / tenant-signup + password reset
 - [x] RBAC (org-scoped) + super-admin tenancy console
-- [x] Multi-tenant isolation across appointments, billing, orders, clinical,
+- [x] Tenant-scoped isolation across appointments, billing, orders, clinical,
       treatments, documents, skin care, clinics, doctors, patients, users, CMS
+- [x] Multi-environment configuration with independent environment/database boundaries
+- [x] Multi-tenant memberships and organization/clinic-scoped RBAC
+- [x] Public tenant routes resolved by tenant slug
 - [x] Web: Tailwind + shadcn/ui, dark mode, per-subdomain tenant theming + metadata
 - [ ] Patient portal, clinic-staff dashboard, platform console
 - [ ] Checkout/payments/notifications UI, reports, search polish
@@ -257,4 +252,4 @@ ClinicCare has explicit isolation boundaries:
 
 Protected API requests may select context with `X-Tenant-Slug` and `X-Clinic-Id`. The server validates membership, tenant lifecycle, clinic ownership and role assignments before calculating effective permissions.
 
-See [`docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md`](docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md) for the full model.
+See [`docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md`](docs/MULTI-TENANCY-RBAC-ENVIRONMENTS.md) and [`docs/ENVIRONMENTS.md`](docs/ENVIRONMENTS.md) for the complete model.

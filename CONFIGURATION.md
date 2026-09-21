@@ -17,6 +17,6 @@ For local development, copy the relevant `.env.example` files to `.env` in the c
 
 ## Important variables
 
-`API_HOST`, `API_PORT`, `API_BASE_PATH`, `WEB_ORIGIN`, `DATABASE_URL`, `WEB_HOST`, `WEB_PORT`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_BASE_PATH`, `NEXT_PUBLIC_TENANT_SLUG`, `TENANT_BASE_DOMAIN`, `TENANT_QUERY_PARAM`, `DEFAULT_TENANT_SLUG`, `K8S_NAMESPACE`, `POSTGRES_LOCAL_PORT`, and `REDIS_LOCAL_PORT` are environment-controlled.
+`APP_ENV`, `DEPLOYMENT_NAMESPACE`, `API_HOST`, `API_PORT`, `API_BASE_PATH`, `WEB_ORIGIN`, `DATABASE_URL`, `WEB_HOST`, `WEB_PORT`, `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_API_BASE_PATH`, `TENANT_BASE_DOMAIN`, `TENANT_QUERY_PARAM`, `DEFAULT_TENANT_SLUG`, and `K8S_NAMESPACE` are environment-controlled. Redis is optional infrastructure and is not required by the current API runtime.
 
 Secrets such as `DATABASE_URL`, `JWT_SECRET`, provider credentials, and AWS credentials must never be committed.

@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '../generated/prisma/client';
-import * as bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -64,7 +64,7 @@ export class AuthService {
 
   private async issueTokens(userId: number, email: string, role: Role, organizationId: number) {
     const permissions = await this.permissionsFor(userId, role, organizationId);
-    const accessToken = await this.jwt.signAsync({ sub: userId, email, role, permissions, organizationId });
+    const accessToken = await this.jwt.signAsync({ sub: userId, email, role, permissions, organizationId, environment: apiConfig.environment });
     const refreshToken = randomBytes(48).toString('hex');
     await this.prisma.refreshToken.create({
       data: {
