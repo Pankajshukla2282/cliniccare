@@ -1,11 +1,12 @@
 import {
   CanActivate,
   ExecutionContext,
+  Inject,
   Injectable,
   UnauthorizedException,
   ForbiddenException,
 } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { Reflector as NestReflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import { IS_PUBLIC_KEY, PERMISSIONS_KEY } from './decorators';
@@ -13,7 +14,7 @@ import { IS_PUBLIC_KEY, PERMISSIONS_KEY } from './decorators';
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
-    private readonly reflector: Reflector,
+    @Inject(NestReflector) private readonly reflector: NestReflector,
     private readonly jwt: JwtService,
   ) {}
 
@@ -49,7 +50,7 @@ export class JwtAuthGuard implements CanActivate {
 @Injectable()
 export class TenantAccessGuard implements CanActivate {
   constructor(
-    private readonly reflector: Reflector,
+    @Inject(NestReflector) private readonly reflector: NestReflector,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -128,7 +129,7 @@ export class TenantAccessGuard implements CanActivate {
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector) {}
+  constructor(@Inject(NestReflector) private readonly reflector: NestReflector) {}
 
   canActivate(ctx: ExecutionContext): boolean {
     const required = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [

@@ -1,4 +1,4 @@
-import { Controller, Get, NotFoundException, Param, ParseIntPipe, Query } from '@nestjs/common';
+import { Controller, Get, Inject, NotFoundException, Param, ParseIntPipe, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Public } from '../common/decorators';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,7 +7,7 @@ import { resolvePublicOrganizationId } from './tenant';
 @ApiTags('public')
 @Controller()
 export class PublicController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   @Public()
   @Get('public/tenant/:slug')

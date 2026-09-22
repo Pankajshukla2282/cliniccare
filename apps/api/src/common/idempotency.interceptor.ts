@@ -1,5 +1,4 @@
 import { CallHandler, ConflictException, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
 import { Observable, from } from 'rxjs';
 import { switchMap, tap } from 'rxjs/operators';
 import type { Request } from 'express';
@@ -9,9 +8,10 @@ import { apiConfig } from '../config';
 
 @Injectable()
 export class IdempotencyInterceptor implements NestInterceptor {
-  constructor(private readonly reflector: Reflector, private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const required = this.reflector.getAllAndOverride<boolean>(IDEMPOTENCY_KEY, [context.getHandler(), context.getClass()]);
+    const required = Reflect.getMetadata(IDEMPOTENCY_KEY, context.getHandler())
+      ?? Reflect.getMetadata(IDEMPOTENCY_KEY, context.getClass());
     if (!required) return next.handle();
     const req = context.switchToHttp().getRequest<Request & { user?: { sub?: number; organizationId?: number } }>();
     const key = req.header('idempotency-key')?.trim();
