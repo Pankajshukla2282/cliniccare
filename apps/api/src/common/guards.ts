@@ -15,7 +15,7 @@ import { IS_PUBLIC_KEY, PERMISSIONS_KEY } from './decorators';
 export class JwtAuthGuard implements CanActivate {
   constructor(
     @Inject(NestReflector) private readonly reflector: NestReflector,
-    private readonly jwt: JwtService,
+    @Inject(JwtService) private readonly jwt: JwtService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
@@ -36,7 +36,8 @@ export class JwtAuthGuard implements CanActivate {
     try {
       req.user = await this.jwt.verifyAsync(match[1], { algorithms: ['HS256'], issuer: 'cliniccare', audience: 'cliniccare-web' });
       return true;
-    } catch {
+    } catch (error) {
+      console.error('[API] JWT verification failed', error);
       throw new UnauthorizedException('Invalid or expired token');
     }
   }
@@ -51,7 +52,7 @@ export class JwtAuthGuard implements CanActivate {
 export class TenantAccessGuard implements CanActivate {
   constructor(
     @Inject(NestReflector) private readonly reflector: NestReflector,
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {

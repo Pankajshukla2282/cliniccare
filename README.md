@@ -174,6 +174,22 @@ Sandbox sign-in (demo only — change before shared use):
 |---------------|------------------------------|---------------|-------|
 | Super admin   | `superadmin@cliniccare.local`| `SuperAdmin123!` | platform / all tenants |
 | Tenant admin  | `admin@cliniccare.local`     | `ChangeMe123!`    | ClinicCare Demo org |
+| Clinic admin  | `clinic-admin+cliniccare-demo@cliniccare.local` | `Staff123!` | Main Clinic |
+| Doctor        | `doctor+cliniccare-demo@cliniccare.local` | `Doctor123!` | Main Clinic / clinical care |
+| Receptionist  | `reception+cliniccare-demo@cliniccare.local` | `Reception123!` | Main Clinic / front desk |
+| Nurse         | `nurse+cliniccare-demo@cliniccare.local` | `Staff123!` | Main Clinic / care support |
+| Pharmacist    | `pharmacist+cliniccare-demo@cliniccare.local` | `Staff123!` | Pune Skin & Aesthetic / products |
+| Accountant    | `accountant+cliniccare-demo@cliniccare.local` | `Staff123!` | Main Clinic / billing |
+| Content       | `content+cliniccare-demo@cliniccare.local` | `Staff123!` | Pune Skin & Aesthetic / CMS |
+| Patient       | `patient+cliniccare-demo@cliniccare.local` | `Patient123!` | Main Clinic / own records |
+
+The second sample tenant is `cliniccare-demo-wellness` with the same role
+pattern and the `+cliniccare-demo-wellness` email suffix. The seed creates two
+primary demo clinics (`Main Clinic` in Mumbai and `Pune Skin & Aesthetic`) and
+sample appointment, consultation, prescription, treatment-plan, skin-
+assessment, product, CMS, coupon, and notification data. Use the accounts to
+verify that clinical, front-desk, billing, product, content, and patient
+operations are limited by RBAC and tenant scope.
 
 ## Multi-tenant foundation (done)
 

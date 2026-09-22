@@ -1,4 +1,4 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Inject, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { OrgId, Permissions } from '../common/decorators';
 import { ReportsService } from './reports.service';
@@ -7,7 +7,7 @@ import { ReportsService } from './reports.service';
 @ApiBearerAuth()
 @Controller('reports')
 export class ReportsController {
-  constructor(private readonly reports: ReportsService) {}
+  constructor(@Inject(ReportsService) private readonly reports: ReportsService) {}
 
   @Permissions('report.view')
   @Get('dashboard')

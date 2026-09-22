@@ -1,10 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateClinicDto, CreateHolidayDto, CreateOrganizationDto, CreateRoomDto, UpdateClinicDto } from './dto';
 
 @Injectable()
 export class ClinicsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   createOrganization(dto: CreateOrganizationDto) {
     return this.prisma.organization.create({ data: dto });

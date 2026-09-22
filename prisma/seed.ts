@@ -101,6 +101,28 @@ async function upsertClinic(organizationId: number, name: string, city: string, 
   return prisma.clinic.create({ data: { organizationId, name, city, state, status: 'ACTIVE' } });
 }
 
+async function seedRoleAccounts(organizationId: number, clinics: { primary: number; secondary: number }, key: string) {
+  const accounts: Array<{ role: Role; email: string; firstName: string; lastName: string; clinicId: number }> = [
+    { role: Role.CLINIC_ADMIN, email: `clinic-admin+${key}@cliniccare.local`, firstName: 'Meera', lastName: 'Kapoor', clinicId: clinics.primary },
+    { role: Role.NURSE, email: `nurse+${key}@cliniccare.local`, firstName: 'Ananya', lastName: 'Joshi', clinicId: clinics.primary },
+    { role: Role.PHARMACIST, email: `pharmacist+${key}@cliniccare.local`, firstName: 'Kabir', lastName: 'Mehta', clinicId: clinics.secondary },
+    { role: Role.ACCOUNTANT, email: `accountant+${key}@cliniccare.local`, firstName: 'Neha', lastName: 'Iyer', clinicId: clinics.primary },
+    { role: Role.CONTENT_MANAGER, email: `content+${key}@cliniccare.local`, firstName: 'Tara', lastName: 'Nair', clinicId: clinics.secondary },
+  ];
+
+  for (const account of accounts) {
+    await upsertUser({
+      email: account.email,
+      password: process.env.SEED_STAFF_PASSWORD ?? 'Staff123!',
+      firstName: account.firstName,
+      lastName: account.lastName,
+      role: account.role,
+      organizationId,
+      clinicId: account.clinicId,
+    });
+  }
+}
+
 async function seedTenant(organizationId: number, mainClinic: { id: number }, label: string, key: string, adminEmailOverride?: string) {
   const safeKey = key.replace(/[^a-z0-9]+/g, '-');
   const adminEmail = adminEmailOverride ?? `admin+${safeKey}@cliniccare.local`;
@@ -148,11 +170,77 @@ async function seedTenant(organizationId: number, mainClinic: { id: number }, la
   }
 
   const productCategory = await prisma.productCategory.upsert({ where: { organizationId_name: { organizationId, name: 'Skin Care' } }, create: { organizationId, name: 'Skin Care' }, update: {} });
-  await prisma.product.upsert({
+  const product = await prisma.product.upsert({
     where: { organizationId_slug: { organizationId, slug: 'gentle-cleanser' } },
     create: { organizationId, categoryId: productCategory.id, name: 'Gentle Cleanser', slug: 'gentle-cleanser', price: 650, sku: `CL-${organizationId}-001`, inventoryQuantity: 100, status: 'ACTIVE' },
     update: { categoryId: productCategory.id, price: 650, inventoryQuantity: 100, status: 'ACTIVE' },
   });
+
+  const appointmentDate = new Date('2026-10-01T00:00:00.000Z');
+  const appointment = await prisma.appointment.findFirst({ where: { patientId: patient.id, doctorId: doctor.id, appointmentDate } });
+  const demoAppointment = appointment ?? await prisma.appointment.create({
+    data: {
+      patientId: patient.id,
+      doctorId: doctor.id,
+      clinicId: mainClinic.id,
+      serviceId: services[2] ? (await prisma.service.findUniqueOrThrow({ where: { organizationId_name: { organizationId, name: services[2].name } } })).id : null,
+      appointmentDate,
+      startTime: '10:00',
+      endTime: '10:30',
+      status: 'CONFIRMED',
+      type: 'IN_PERSON',
+      notes: 'Demo appointment for RBAC workflow testing.',
+    },
+  });
+
+  const consultation = await prisma.consultation.findFirst({ where: { appointmentId: demoAppointment.id } }) ?? await prisma.consultation.create({
+    data: {
+      patientId: patient.id,
+      doctorId: doctor.id,
+      clinicId: mainClinic.id,
+      appointmentId: demoAppointment.id,
+      consultationType: 'IN_PERSON',
+      chiefComplaint: 'Persistent acne and uneven skin tone',
+      assessment: 'Mild inflammatory acne',
+      diagnosis: 'Acne vulgaris',
+      advice: 'Continue gentle cleanser and use sunscreen daily.',
+      followUpDate: new Date('2026-10-15T00:00:00.000Z'),
+    },
+  });
+
+  const prescription = await prisma.prescription.findFirst({ where: { consultationId: consultation.id } }) ?? await prisma.prescription.create({
+    data: {
+      patientId: patient.id,
+      doctorId: doctor.id,
+      consultationId: consultation.id,
+      title: 'Acne care starter plan',
+      instructions: 'Use as directed after the consultation.',
+      items: { create: [{ productId: product.id, name: product.name, dosage: 'Use twice daily', quantity: 1, price: product.price }] },
+    },
+  });
+
+  const treatmentPlan = await prisma.treatmentPlan.findFirst({ where: { patientId: patient.id, doctorId: doctor.id, title: 'Acne recovery plan' } }) ?? await prisma.treatmentPlan.create({
+    data: {
+      patientId: patient.id,
+      doctorId: doctor.id,
+      clinicId: mainClinic.id,
+      title: 'Acne recovery plan',
+      type: 'SKIN_CARE',
+      totalSessions: 4,
+      completedSessions: 1,
+      startDate: new Date('2026-09-15T00:00:00.000Z'),
+      notes: 'Demo treatment plan for doctor, nurse, and patient views.',
+      sessions: { create: [{ sessionNumber: 1, date: new Date('2026-09-15T00:00:00.000Z'), status: 'COMPLETED', observations: 'Baseline assessment recorded.' }] },
+    },
+  });
+
+  await prisma.skinAssessment.upsert({
+    where: { id: (await prisma.skinAssessment.findFirst({ where: { patientId: patient.id, treatmentPlanId: treatmentPlan.id } }))?.id ?? -1 },
+    create: { patientId: patient.id, consultationId: consultation.id, treatmentPlanId: treatmentPlan.id, skinType: 'Combination', concerns: ['acne', 'pigmentation'], severity: 'MILD', assessmentDate: new Date('2026-09-15T00:00:00.000Z'), recommendations: 'Gentle cleanser, sunscreen, and follow-up review.' },
+    update: { recommendations: 'Gentle cleanser, sunscreen, and follow-up review.' },
+  });
+
+  void prescription;
 
   await prisma.cmsPage.upsert({
     where: { organizationId_slug: { organizationId, slug: 'faq' } },
@@ -202,8 +290,9 @@ async function main() {
     update: { name: tenantName, status: 'ACTIVE', onboardingCompleted: true, maxClinics: 5, maxDoctors: 25, maxPatients: 10000, settings: { environment, seeded: true } },
   });
   const mainClinic = await upsertClinic(tenant.id, 'Main Clinic', 'Mumbai', 'Maharashtra');
-  await upsertClinic(tenant.id, 'Pune Skin & Aesthetic', 'Pune', 'Maharashtra');
+  const secondaryClinic = await upsertClinic(tenant.id, 'Pune Skin & Aesthetic', 'Pune', 'Maharashtra');
   await upsertClinic(tenant.id, 'Goa Wellness', 'Panaji', 'Goa');
+  await seedRoleAccounts(tenant.id, { primary: mainClinic.id, secondary: secondaryClinic.id }, tenantSlug);
   const primaryDemo = await seedTenant(tenant.id, mainClinic, 'Clinic', tenantSlug, process.env.SEED_ADMIN_EMAIL ?? 'admin@cliniccare.local');
 
   const secondTenant = await prisma.organization.upsert({
@@ -212,6 +301,7 @@ async function main() {
     update: { status: 'TRIAL' },
   });
   const secondClinic = await upsertClinic(secondTenant.id, 'Aarogyam Main Clinic', 'Nagpur', 'Maharashtra');
+  await seedRoleAccounts(secondTenant.id, { primary: secondClinic.id, secondary: secondClinic.id }, secondTenantSlug);
   await seedTenant(secondTenant.id, secondClinic, 'Aarogyam', secondTenantSlug);
 
   // Demonstrate true multi-tenancy: the primary tenant administrator is also
@@ -233,7 +323,7 @@ async function main() {
     tenant: { id: tenant.id, slug: tenant.slug, clinicId: mainClinic.id },
     secondTenant: { id: secondTenant.id, slug: secondTenant.slug, clinicId: secondClinic.id },
     platform: { id: platform.id, superAdmin: superAdminEmail },
-    demoPasswords: { admin: 'SEED_ADMIN_PASSWORD or ChangeMe123!', doctor: 'SEED_DOCTOR_PASSWORD or Doctor123!', reception: 'SEED_RECEPTION_PASSWORD or Reception123!', patient: 'SEED_PATIENT_PASSWORD or Patient123!' },
+    demoPasswords: { admin: 'SEED_ADMIN_PASSWORD or ChangeMe123!', doctor: 'SEED_DOCTOR_PASSWORD or Doctor123!', reception: 'SEED_RECEPTION_PASSWORD or Reception123!', patient: 'SEED_PATIENT_PASSWORD or Patient123!', staff: 'SEED_STAFF_PASSWORD or Staff123!' },
   }, null, 2));
 }
 

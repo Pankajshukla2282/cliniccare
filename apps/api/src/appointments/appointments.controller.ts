@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { AppointmentStatus } from '../generated/prisma/client';
 import { CurrentUser, OrgId, Permissions, Public, RequestUser, RequireIdempotency } from '../common/decorators';
@@ -11,7 +11,7 @@ import { BookAppointmentDto, CancelAppointmentDto, RescheduleAppointmentDto, Slo
 @ApiBearerAuth()
 @Controller('appointments')
 export class AppointmentsController {
-  constructor(private readonly appointments: AppointmentsService, private readonly prisma: PrismaService) {}
+  constructor(@Inject(AppointmentsService) private readonly appointments: AppointmentsService, @Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   @Permissions('appointment.read')
   @Get()

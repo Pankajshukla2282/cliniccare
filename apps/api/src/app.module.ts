@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { JwtModule } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
@@ -39,6 +40,11 @@ import { apiConfig } from './config';
 @Module({
   imports: [
     ThrottlerModule.forRoot([{ ttl: apiConfig.rateLimitTtlMs, limit: apiConfig.rateLimitMax }]),
+    JwtModule.register({
+      global: true,
+      secret: apiConfig.jwtSecret,
+      signOptions: { expiresIn: apiConfig.jwtExpiresIn as any, algorithm: 'HS256', issuer: 'cliniccare', audience: 'cliniccare-web' },
+    }),
     PrismaModule, AuthModule, AuditModule, PatientsModule, AppointmentsModule, ClinicalModule, BillingModule,
     DoctorsModule, ClinicsModule, DocumentsModule, EngagementModule, NotificationsModule, OrdersModule, ProductsModule,
     CatalogModule, ReportsModule, SearchModule, SkinModule, TenantsModule, TreatmentsModule, UsersModule, CmsModule,

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { OrgId, Permissions } from '../common/decorators';
 import { ProductsService } from './products.service';
@@ -15,7 +15,7 @@ import {
 @ApiBearerAuth()
 @Controller()
 export class ProductsController {
-  constructor(private readonly products: ProductsService) {}
+  constructor(@Inject(ProductsService) private readonly products: ProductsService) {}
 
   @Permissions('product.manage')
   @Post('product-categories')

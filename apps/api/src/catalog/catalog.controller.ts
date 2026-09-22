@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { OrgId, Permissions } from '../common/decorators';
 import { CatalogService } from './catalog.service';
@@ -8,7 +8,7 @@ import { CreateServiceCategoryDto, CreateServiceDto, UpdateServiceDto } from './
 @ApiBearerAuth()
 @Controller()
 export class CatalogController {
-  constructor(private readonly catalog: CatalogService) {}
+  constructor(@Inject(CatalogService) private readonly catalog: CatalogService) {}
 
   @Permissions('service.manage')
   @Post('service-categories')

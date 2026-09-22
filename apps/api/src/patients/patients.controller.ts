@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, ParseIntPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { OrgId, Permissions } from '../common/decorators';
 import { CreatePatientDto, UpdatePatientDto } from './dto';
@@ -8,7 +8,7 @@ import { PatientsService } from './patients.service';
 @ApiBearerAuth()
 @Controller('patients')
 export class PatientsController {
-  constructor(private readonly patients: PatientsService) {}
+  constructor(@Inject(PatientsService) private readonly patients: PatientsService) {}
 
   @Permissions('patient.manage')
   @Post()
