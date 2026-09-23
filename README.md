@@ -132,6 +132,8 @@ Root scripts: `db:push`, `db:generate`, `db:studio`, `prisma:validate`,
 ## Quickstart
 ## Reference docs & diagrams
 
+- [Demo website development prompt](docs/DEMO-WEBSITE-DEVELOPMENT-PROMPT.md) — complete implementation brief for a populated, role-aware ClinicCare demo
+
 Planning set (BRD -> TDD -> SOW -> RFP, signed-off order):
 
 

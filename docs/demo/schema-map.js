@@ -83,6 +83,7 @@ window.CLINICCARE_MODULES = [
  {id:'notifications',label:'Notifications',group:'PEOPLE & CONTROL',icon:'N'},
  {id:'cms',label:'CMS / Public Content',group:'GROWTH',icon:'CMS'},
  {id:'reports',label:'Reports & Search',group:'INSIGHTS',icon:'BI'},
+ {id:'monthly',label:'Monthly Totals',group:'INSIGHTS',icon:'Σ'},
  {id:'audit',label:'Audit & Reliability',group:'GOVERNANCE',icon:'A'},
  {id:'schema',label:'API / Schema Map',group:'GOVERNANCE',icon:'DB'},
  {id:'settings',label:'Tenant & Environment',group:'GOVERNANCE',icon:'⚙'}

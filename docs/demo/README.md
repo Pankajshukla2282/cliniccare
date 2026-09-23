@@ -7,6 +7,10 @@ This is a dependency-free proposal/demo UI. It is deliberately separated into:
 - `schema-map.js` — domain/API/schema alignment manifest
 - `app.js` — demo state, workflows, routing and interactions
 
+The demo is intentionally self-contained and can be opened directly or served
+from a static web server. Its state is persisted in browser `localStorage` and
+can be restored from **Tenant & Environment → Reset proposal demo data**.
+
 ## Design principle
 
 The previous wireframes accumulated functionality inside one generated HTML file. This version treats the wireframe as a thin presentation client over a domain-shaped demo store. Navigation IDs, domain entities, scope rules, workflow actions and audit/idempotency behavior are centralized.
@@ -52,3 +56,13 @@ This includes Patients, Appointments & Queue, Leads, Reviews, Consultations, Pre
 The Services & Categories screen also exposes separate Add Service and Add Category actions, with View/Edit/Delete controls for both datasets.
 
 All demo mutations continue to use the existing audit/idempotency mutation layer so proposal interactions remain duplicate-safe and auditable.
+
+## Verified demo behaviors
+
+- Both seeded tenants have isolated operational data; older localStorage snapshots are hydrated with the current second-tenant sample records.
+- Organization and clinic context are applied to lists, dashboards, search, detail routes and mutations.
+- Acting-role navigation and restricted deep links enforce the demo permission matrix, including patient self-scope and doctor clinical scope.
+- Appointment queue advancement, invoice collection, paid-invoice refunds, notification read state, CRUD actions, audit events and idempotency records are interactive.
+- Script URLs are versioned in `index.html` so a previously cached approval-pack page receives runtime fixes without manual cache clearing.
+
+The approval pack uses simulated data and payment/document behavior only; it does not represent production authorization or external payment, messaging, or healthcare integrations.
