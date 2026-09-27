@@ -1,0 +1,46 @@
+{
+  "name": "@cliniccare/auth",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start:dev": "tsc -p tsconfig.build.json && node --watch dist/main.js",
+    "start": "node dist/main.js",
+    "start:prod": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@nestjs/common": "^12.0.3",
+    "@nestjs/config": "^12.0.1",
+    "@nestjs/core": "^12.0.3",
+    "@nestjs/jwt": "^12.0.1",
+    "@nestjs/swagger": "^12.0.2",
+    "@nestjs/throttler": "^6.5.0",
+    "@prisma/client": "7.10.0",
+    "bcryptjs": "^2.4.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.4",
+    "helmet": "^8.3.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "eslint": "^9.39.5",
+    "tsx": "^4.19.0",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": "24.21.0",
+    "npm": ">=11 <12"
+  },
+  "description": "",
+  "main": "index.js",
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs"
+}

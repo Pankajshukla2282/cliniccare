@@ -14,11 +14,11 @@ $ScriptsDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 switch ($Action) {
     "start" {
-        $TargetScript = Join-Path $ScriptsDir "start-dev.ps1"
+        $TargetScript = Join-Path $ScriptsDir "start.ps1"
     }
 
     "stop" {
-        $TargetScript = Join-Path $ScriptsDir "stop-dev.ps1"
+        $TargetScript = Join-Path $ScriptsDir "stop.ps1"
     }
 
     "build" {

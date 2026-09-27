@@ -1,79 +1,127 @@
-# ClinicCare Multi-Tenancy, Environments and RBAC
+# ClinicCare Multi-Tenancy, RBAC & Microservice Scope
 
-## Isolation model
+## Isolation Model: Three Independent Boundaries
 
-ClinicCare has three independent boundaries:
+ClinicCare decomposes into **9 microservices** that share a PostgreSQL database but enforce isolation through three distinct boundaries:
 
 ```text
-Deployment environment
+Deployment Environment
   development | staging | production
           |
-          +-- isolated infrastructure / secrets / database
+          +-- Infrastructure isolation (K8s namespaces, secrets, DB clusters)
           |
           v
-Tenant (Organization)
+Tenant (Organization) ----> Clinic ---> Clinical Data (patients, appointments, etc.)
           |
-          +-- Clinic(s)
-          +-- Patients
-          +-- Services / Products / Orders / Clinical records / CMS
+          +-- RBAC & Permissions
           |
-          +-- OrganizationMembership
-          |      user <-> tenant
-          |
-          +-- UserRole
-                 organization scope OR clinic scope
+          +-- Microservice Scopes
 ```
 
-### Environment
+### 1. Deployment Environment Isolation
 
-`APP_ENV` identifies the deployment environment. Environment isolation is infrastructure-level, not a row column on every clinical table. Each environment should use its own PostgreSQL database, object-storage prefix/bucket, secrets, Redis/job infrastructure, hostnames and Kubernetes namespace.
+- **`APP_ENV`** identifies the deployment environment
+- **Infrastructure-Level Isolation**: Each environment uses separate Kubernetes namespaces, separate secrets, and (in production) a dedicated PostgreSQL cluster
+- **Not a row column**: Environment isolation is NOT achieved by adding an `environmentId` column to every clinical table
+- **Recommended namespaces**:
+  - `cliniccare-development`
+  - `cliniccare-staging`
+  - `cliniccare-production`
 
-Recommended namespaces:
+⚠️ **Never point staging or production at the development database.**
 
-- `cliniccare-development`
-- `cliniccare-staging`
-- `cliniccare-production`
+### 2. Tenant (Organization) Boundary
 
-Never point staging or production at the development database.
+- **`Organization`** is the tenant boundary
+- Tenant-owned records carry `organizationId` directly or are reached through a tenant-owned parent (Patient, Clinic, Order, Doctor.clinic)
+- **Authenticated requests use**:
+  - `X-Tenant-Slug` — requested tenant context (canonical)
+  - `X-Clinic-Id` — optional clinic context
+- **`TenantAccessGuard`** verifies:
+  - User is active
+  - Tenant is active/trial
+  - Membership exists (user → tenant)
+  - Clinic belongs to that tenant
+  - User's role assignments apply to that scope
 
-### Tenant
+### 2b. Memberships: Which Tenants a User May Access
 
-`Organization` is the tenant boundary. Tenant-owned records carry `organizationId` directly or are reached through a tenant-owned parent such as `Patient`, `Clinic`, `Order` or `Doctor.clinic`.
+- **`OrganizationMembership`** answers which tenants a user may access
+- A user may have memberships in many organizations
+- The user's `organizationId` remains the **home/default organization** for compatibility
+- It is **not** a substitute for membership authorization
 
-Authenticated requests use:
+⚠️ **Never use `User.organizationId` alone to authorize a multi-tenant operation.**
 
-- `X-Tenant-Slug` — requested tenant context
-- `X-Clinic-Id` — optional clinic context
+### 3. RBAC & Permissions
 
-`TenantAccessGuard` verifies the user is active, the tenant is active/trial, the membership exists, the clinic belongs to that tenant, and the user's role assignments apply to that scope.
+- **`UserRole`** answers what the user may do and can be:
+  - **Organization scoped**: `organizationId != null, clinicId = null`
+  - **Clinic scoped**: `organizationId != null, clinicId != null`
+  - **Platform scoped**: `SUPER_ADMIN`, with global permission rows where appropriate
+- **`scopeKey`** is the idempotent natural key used by the seed and RBAC services
 
-### Memberships
+### 4. Permissions
 
-`OrganizationMembership` answers **which tenants a user may access**. A user may have memberships in many organizations.
+- **`RolePermission`** contains:
+  - Platform defaults (`organizationId = null`)
+  - Optional tenant overrides
+- **Effective permissions** are calculated for the active tenant/clinic on every protected request
 
-The user's `organizationId` remains the home/default organization for compatibility. It is not a substitute for membership authorization.
+### 5. JWT is a Credential Only
 
-### Roles
+- A JWT is a credential only
+- Tenant lifecycle and role membership are **revalidated against PostgreSQL on each protected request**
+- Never accept a client-supplied tenant ID as authorization proof
+- Resolve authenticated tenant context from membership + `X-Tenant-Slug`
+- Validate `X-Clinic-Id` belongs to the active tenant
+- Never use `User.organizationId` alone to authorize a multi-tenant operation
+- Public routes resolve tenant by active slug
 
-`UserRole` answers **what the user may do** and can be:
+## Microservice Scope Rules
 
-- organization scoped: `organizationId != null, clinicId = null`
-- clinic scoped: `organizationId != null, clinicId != null`
-- platform scoped: `SUPER_ADMIN`, with global permission rows where appropriate
+Each microservice enforces tenant/clinic scope at the API gateway level:
 
-`scopeKey` is the idempotent natural key used by the seed and RBAC services.
+| Microservice | Scope Headers | Enforced By |
+|---|---|---|
+| **auth** | `X-Tenant-Slug` | Auth gateway |
+| **clinical** | `X-Tenant-Slug`, `X-Clinic-Id` | API gateway + service guards |
+| **billing** | `X-Tenant-Slug`, `X-Clinic-Id` | API gateway + service guards |
+| **product** | `X-Tenant-Slug` | API gateway + service guards |
+| **queue** | `X-Tenant-Slug`, `X-Clinic-Id` | API gateway + service guards |
+| **lab** | `X-Tenant-Slug`, `X-Clinic-Id` | API gateway + service guards |
+| **cms** | `X-Tenant-Slug` | API gateway + service guards |
 
-### Permissions
+### Scope Enforcement Example
 
-`RolePermission` contains platform defaults (`organizationId = null`) and optional tenant overrides. Effective permissions are calculated for the active tenant/clinic on every protected request.
+```http
+GET /api/v1/clinical/patients?tenant=cliniccare-demo&clinic=main-clinic
 
-A JWT is a credential only. Tenant lifecycle and role membership are revalidated against PostgreSQL on each protected request.
+Response: 200 with patients from "cliniccare-demo" organization, "main-clinic" only
 
-## Public tenant context
+# Without clinic scope:
+GET /api/v1/clinical/patients?tenant=cliniccare-demo
+
+Response: 200 with all patients from "cliniccare-demo" organization
+
+# Without tenant scope (unauthorized):
+GET /api/v1/clinical/patients
+
+Response: 401 Unauthorized - missing X-Tenant-Slug header
+```
+
+### Idempotency
+
+- State-changing operations marked with `@RequireIdempotency()` use an idempotency key
+- Key is associated with the **authenticated user AND active tenant**
+- Retrying the same operation returns the existing result rather than creating a duplicate
+- Tenant switching does not change the idempotency namespace of another tenant
+
+## Public Tenant Context
 
 Public tenant routes must use the tenant slug as the canonical context:
 
-```text
+```http
 GET /api/v1/public/doctors?tenant=cliniccare-demo
 GET /api/v1/public/services?tenant=cliniccare-demo
 GET /api/v1/public/packages?tenant=cliniccare-demo
@@ -83,9 +131,9 @@ GET /api/v1/faqs?tenant=cliniccare-demo
 GET /api/v1/appointments/slots?tenant=cliniccare-demo&doctorId=1&date=2026-09-25
 ```
 
-A legacy `organizationId` query parameter remains accepted temporarily for existing clients, but new clients should always use `tenant`.
+A legacy `organizationId` query parameter remains accepted temporarily for existing clients, but **new clients should always use `tenant`.**
 
-## Environment-aware seed
+## Environment-Aware Seed
 
 The seed is idempotent and never depends on hard-coded clinic IDs. Use:
 
@@ -104,31 +152,34 @@ $env:SEED_ALLOW_DEMO='true'
 npm run db:seed
 ```
 
-Demo seeding is blocked in production unless explicitly enabled.
+⚠️ **Demo seeding is blocked in production unless explicitly enabled.**
 
-## Idempotency
+## Security Rules (Microservice-Aware)
 
-State-changing operations marked with `@RequireIdempotency()` use an idempotency key associated with the authenticated user and active tenant. Retrying the same operation returns the existing result rather than creating a duplicate operation.
+1. ✅ **Never accept a client-supplied tenant ID as authorization proof**
+2. ✅ **Resolve authenticated tenant context from membership + `X-Tenant-Slug`**
+3. ✅ **Validate `X-Clinic-Id` belongs to the active tenant**
+4. ✅ **Never use `User.organizationId` alone to authorize a multi-tenant operation**
+5. ✅ **Public routes resolve tenant by active slug**
+6. ✅ **Keep environment databases and secrets separate**
+7. ✅ **Never commit `.env` or generated build directories**
 
-Tenant switching does not change the idempotency namespace of another tenant.
+8. ✅ **Each microservice enforces scope at the API gateway level**
+9. ✅ **Tenant context is resolved before any service handler executes**
+10. ✅ **Audit logs record: actor, tenant, clinic, entity, action, timestamp, result**
 
-## Security rules
+## Microservice RBAC Matrix
 
-1. Never accept a client-supplied tenant ID as authorization proof.
-2. Resolve authenticated tenant context from membership + `X-Tenant-Slug`.
-3. Validate `X-Clinic-Id` belongs to the active tenant.
-4. Never use `User.organizationId` alone to authorize a multi-tenant operation.
-5. Public routes resolve tenant by active slug.
-6. Keep environment databases and secrets separate.
-7. Never commit `.env` or generated build directories.
+| Role | auth | clinical | billing | product | queue | lab | cms |
+|---|---|---|---|---|---|---|---|
+| Super Admin | ✅ global | ✅ all clinics | ✅ all orgs | ✅ all orgs | ✅ all orgs | ✅ all orgs | ✅ all orgs |
+| Tenant Admin | ✅ own tenant | ✅ own clinics | ✅ own org | ✅ own org | ✅ own org | ✅ own org | ✅ own org |
+| Clinic Admin | ✅ own tenant | ✅ own clinic | ✅ own org | ✅ own org | ✅ own org | ✅ own org | ✅ own org |
+| Doctor | ✅ own tenant | ✅ own clinic | ❌ restricted | ✅ own org | ✅ own org | ✅ own org | ❌ restricted |
+| Receptionist | ✅ own tenant | ✅ own clinic | ✅ own org | ✅ own org | ✅ own org | ❌ restricted | ❌ restricted |
+| Pharmacist | ✅ own tenant | ❌ restricted | ✅ own org | ✅ own inventory | ❌ restricted | ❌ restricted | ❌ restricted |
+| Accountant | ✅ own tenant | ❌ restricted | ✅ all invoices | ❌ restricted | ❌ restricted | ❌ restricted | ❌ restricted |
+| Content Manager | ✅ own tenant | ❌ restricted | ❌ restricted | ❌ restricted | ❌ restricted | ❌ restricted | ✅ all orgs |
+| Patient | ✅ own tenant | ✅ own records | ✅ own orders | ❌ restricted | ❌ restricted | ✅ own records | ❌ restricted |
 
-
-## Kubernetes namespace mapping
-
-| APP_ENV | Kubernetes namespace | Kustomize overlay |
-|---|---|---|
-| `development` | `cliniccare-development` | `infrastructure/k8s/overlays/development` |
-| `staging` | `cliniccare-staging` | `infrastructure/k8s/overlays/staging` |
-| `production` | `cliniccare-production` | `infrastructure/k8s/overlays/prod` |
-
-The legacy generic `cliniccare` namespace is not used by environment deployments.
+✅ = full access | ❌ = restricted or denied

@@ -157,10 +157,10 @@ npx tsx prisma/seed.ts
 $env:DATABASE_URL="postgresql://clinic:clinic-change-me@localhost:5432/cliniccare"
 
 # One-command local development (Windows)
-powershell -ExecutionPolicy Bypass -File .\scripts\start-dev.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1
 
 # Or WSL/Git Bash/Linux/macOS
-bash scripts/start-dev.sh
+bash scripts/start.sh
 
 # Individual processes
 # API (NestJS) on :3100 — swagger at http://localhost:3100/docs

@@ -1,246 +1,296 @@
-# ClinicCare Demo Website Development Prompt
+# ClinicCare Microservice Demo Website Development Prompt
 
-Copy the prompt below into an AI coding tool or use it as the implementation brief for the ClinicCare demo website.
+## Product Context
 
----
+ClinicCare is a **decoupled microservice platform** helping clinics manage the complete patient journey across 9 independent services:
 
-## Prompt
+- **auth** - JWT authentication, tenant signup, RBAC
+- **clinical** - Patients, appointments, consultations, prescriptions
+- **billing** - Orders, payments, invoices, refunds
+- **product** - Catalog, products, inventory, categories
+- **queue** - Queue tickets, patient flow management
+- **lab** - Lab reports, diagnostic results
+- **cms** - CMS pages, content, engagement
+- **api** - Aggregation layer/gateway between frontend and services
+- **web** - Next.js frontend with App Router
 
-You are a senior product engineer and UX designer. Build a polished, fully navigable demo website for **ClinicCare**, a white-label, multi-tenant digital clinic platform. The demo must look and behave like a credible working product, using realistic sample data and complete front-end workflows rather than placeholder cards or dead buttons.
+The demo must look and behave like a credible working product using realistic sample data and complete front-end workflows across all 9 microservices.
 
-### 1. Product context
+### 1. Repository & Implementation Rules
 
-ClinicCare helps clinics manage the complete patient journey in one system:
+Work within the existing ClinicCare repository and follow its conventions:
 
-- tenant and clinic administration
-- patient and doctor directories
-- appointments, scheduling, and queue management
-- consultations, diagnoses, prescriptions, and medical records
-- EECP/EECP+ therapy courses and session tracking
-- dermatology and skin-care assessments, plans, images, and recommendations
-- laboratory and diagnostic workflows
-- documents and patient consents
-- products, inventory, batches, services, categories, and coupons
-- orders, cart, checkout, invoices, payments, and refunds
-- leads, follow-ups, reviews, and notifications
-- CMS pages, articles, FAQs, and tenant branding
-- reports, global search, audit logs, and idempotent operations
+- **Reuse existing Next.js App Router, TypeScript, Tailwind, shadcn/ui, theme provider**, tenant theme utilities, API client, and existing wireframe domain vocabulary
+- **Reuse existing API endpoints and Prisma data contracts** where available across all 9 microservices
+- **Keep parent/core functionality separate** from tenant-specific branding and layout overrides
+- **Use tenant slug as the canonical tenant context** — never treat a client-supplied organization ID as authorization proof
+- **Preserve organization and optional clinic scoping** in every list, detail view, mutation, and search result
+- **Respect RBAC** in the UI and API calls. Hide or disable actions that the active role cannot perform, while keeping the UI usable for demo viewers
+- **If the API or database is unavailable** during a front-end demo, provide a clearly isolated mock-data adapter with the same shape as the real API across all services. The demo must still run and must not silently replace production API behavior
+- **Do not add real payment, SMS, WhatsApp, or external healthcare integrations** — use simulated states and clearly label them as demo behavior
+- **Keep demo seed data idempotent and safe to reset** — never use real personal or medical information
+- **All state-changing operations add audit entries and idempotency records** across the relevant microservice
 
-This is a clinic operations product, not a generic marketing landing page. The first screen must be a useful authenticated operations dashboard.
-
-### 2. Repository and implementation rules
-
-Work within the existing ClinicCare repository and follow its conventions.
-
-- Reuse the existing Next.js App Router, TypeScript, Tailwind, shadcn/ui, theme provider, tenant theme utilities, API client, and existing wireframe domain vocabulary.
-- Reuse existing API endpoints and Prisma data contracts where available. Do not invent conflicting model names or duplicate domain concepts.
-- Keep parent/core functionality separate from tenant-specific branding and layout overrides.
-- Use tenant slug as the canonical tenant context. Never treat a client-supplied organization ID as authorization proof.
-- Preserve organization and optional clinic scoping in every list, detail view, mutation, and search result.
-- Respect RBAC in the UI and API calls. Hide or disable actions that the active role cannot perform, while keeping the UI usable for demo viewers.
-- If the API or database is unavailable during a front-end demo, provide a clearly isolated mock-data adapter with the same shape as the real API. The demo must still run and must not silently replace production API behavior.
-- Do not add real payment, SMS, WhatsApp, or external healthcare integrations. Use simulated states and clearly label them as demo behavior.
-- Keep demo seed data idempotent and safe to reset. Never use real personal or medical information.
-
-### 3. Visual and UX direction
-
-Create a calm, premium clinical operations interface with a distinct ClinicCare identity.
-
-- Use a strong editorial type pairing, restrained color variables, accessible contrast, and a light/dark theme toggle.
-- Support responsive desktop, tablet, and mobile layouts. The dense desktop workspace should remain usable on small screens without horizontal page breakage.
-- Use a persistent sidebar or responsive navigation, top bar with tenant/clinic context, global search, notifications, profile menu, and breadcrumbs.
-- Use tables for operational lists, detail views for records, tabs for related patient data, filters for repeated workflows, and drawers/modals for short create/edit actions.
-- Every important action must provide loading, success, empty, validation, and error states.
-- Use familiar icons from the existing icon library. Tooltips should explain unfamiliar icon-only controls.
-- Avoid decorative marketing sections, oversized hero copy, nested cards, fake charts, and unexplained placeholder text.
-- Use realistic charts only when their underlying demo data is present and inspectable.
-- Make keyboard focus, labels, confirmation dialogs, and destructive-action warnings accessible.
-
-### 4. Required contexts and personas
+### 2. Required Contexts & Personas
 
 Implement a context switcher for the active organization and clinic, plus a demo role switcher or login flow.
 
-Required sample contexts:
+**Required sample contexts:**
 
 - **ClinicCare Demo** (`cliniccare-demo`)
   - Main Clinic, Mumbai
   - Pune Skin & Aesthetic
 - **Aarogyam Skin & Wellness** (`cliniccare-demo-wellness`)
-  - at least one clinic with isolated data
+  - At least one clinic with isolated data across relevant microservices
 
-Required demo personas:
+**Required demo personas** (across microservices):
 
-- Super admin: platform tenant lifecycle and cross-tenant overview
-- Tenant admin: organization settings, users, clinics, RBAC, and reports
-- Clinic admin: clinic operations and staff administration
-- Doctor: appointments, queue, consultations, prescriptions, treatments, and records
-- Receptionist: patient registration, appointments, queue, leads, and basic billing
-- Nurse: patient records, treatment sessions, follow-ups, and care support
-- Pharmacist: products, inventory, orders, prescriptions, and stock actions
-- Accountant: invoices, payments, refunds, orders, and revenue reports
-- Content manager: CMS, FAQs, articles, reviews, and tenant content
-- Patient: own appointments, consultations, prescriptions, records, treatments, documents, orders, and reviews only
+- **Super admin**: Platform tenant lifecycle and cross-tenant overview across all services
+- **Tenant admin**: Organization settings, users, clinics, RBAC, and reports across services
+- **Clinic admin**: Clinic operations and staff administration (clinical + billing + product)
+- **Doctor**: Appointments, queue, consultations, prescriptions, treatments, and records (clinical + queue)
+- **Receptionist**: Patient registration, appointments, queue, leads, and basic billing (clinical + billing)
+- **Nurse**: Patient records, treatment sessions, follow-ups, and care support (clinical + lab)
+- **Pharmacist**: Products, inventory, orders, prescriptions, and stock actions (product + billing)
+- **Accountant**: Invoices, payments, refunds, orders, and revenue reports (billing + product)
+- **Content manager**: CMS, FAQs, articles, reviews, and tenant content (cms)
+- **Patient**: Own appointments, consultations, prescriptions, records, treatments, documents, orders, and reviews only (across relevant services)
 
 Use the repository's seeded demo accounts when available. Do not display production secrets as real credentials in the UI.
 
-### 5. Required information architecture
+### 3. Required Information Architecture
 
-Build these modules and make each route reachable from navigation and deep links.
+Build these modules making each route reachable from navigation and deep links, across the relevant microservices:
 
-#### Overview
+#### Overview (Super Admin)
 
-- Executive dashboard
-- Hospital value and ROI view
+- Executive dashboard showing KPIs across all microservices
+- Hospital value and ROI view with cross-service metrics
+- Recent activity feed with events from all services
 
-Dashboard content must include sample KPI values for today's appointments, patients waiting, revenue collected, outstanding invoices, active treatment courses, low-stock products, doctor utilization, and follow-ups due. Include a recent activity feed and actionable quick links.
+#### Patient Journey (across clinical + queue + lab)
 
-#### Patient journey
+- **Patients** — filtered to active tenant/clinic scope
+- **Patient 360 detail page** — demographics, contact, full history across clinical + lab + cms
+- **Appointments and queue** — booking, queue advancement, state transitions (clinical + queue)
+- **Leads and follow-ups** — capture, nurture, conversion (clinical + billing)
+- **Reviews and engagement** — patient feedback, ratings (cms + clinical)
 
-- Patients
-- Patient 360 detail page
-- Appointments and queue
-- Leads and follow-ups
-- Reviews and engagement
+**Patient 360** must show:
+- Demographics, contact details
+- Appointments (across states: today, upcoming, completed, cancelled, no-show)
+- Consultations, diagnoses, prescriptions (clinical)
+- Medical records, lab results (lab)
+- Treatment progress and EECP courses (clinical)
+- Skin-care plan and sample images (clinical + product)
+- Documents/consents (cms + clinical)
+- Invoices, orders (billing)
+- Timeline activity filtered to active tenant/clinic
 
-Patient 360 must show demographics, contact details, appointments, consultations, prescriptions, medical records, treatment progress, skin-care plan, documents/consents, invoices, orders, and timeline activity, filtered to the active tenant and permitted clinic scope.
+#### Clinical Care (clinical + queue + lab)
 
-#### Clinical care
+- **Consultations and visits** — book, move through states (waiting → in-consultation → completed)
+- **Diagnoses and prescriptions** — record complaint, assessment, diagnosis, advice, follow-up date, prescription items
+- **Medical records** — SOAP notes, progress notes, attachments
+- **Laboratory and diagnostics** — lab orders, results, status tracking (lab)
+- **Teleconsultation** — video/phone visit links and status
+- **Treatments and EECP/EECP+** — treatment courses, planned sessions, session completion tracking
+- **Documents and consents** — upload, consent recording, document timeline (cms + clinical)
+- **Skin care** — assessments, recommendations, sample image references, linked services/products
 
-- Consultations and visits
-- Diagnoses and prescriptions
-- Medical records
-- Laboratory and diagnostics
-- Teleconsultation
-- Treatments and EECP/EECP+
-- Documents and consents
-- Skin care
+**Demonstrable workflows:**
 
-Include these demonstrable workflows:
+1. Register/select a patient, book an appointment, move it through confirmed → waiting → in consultation → completed → cancelled → no-show states (clinical + queue)
+2. Open a consultation, record complaint, assessment, diagnosis, advice, follow-up date, and prescription items (clinical)
+3. Start an EECP/EECP+ treatment course, record planned sessions, mark sessions completed, show progress (clinical)
+4. Create a skin assessment, attach sample treatment images, produce recommendations, link recommended services/products (clinical + product)
+5. Upload/simulate a document, record consent, show in patient timeline (cms + clinical)
+6. Create a lab order/result and expose its status in the patient record (lab)
 
-1. Register or select a patient, book an appointment, move it through confirmed, waiting, in consultation, completed, cancelled, and no-show states.
-2. Open a consultation, record complaint, assessment, diagnosis, advice, follow-up date, and prescription items.
-3. Start an EECP/EECP+ treatment course, record planned sessions, mark sessions completed, and show progress.
-4. Create a skin assessment, attach sample treatment images, produce recommendations, and link recommended services/products.
-5. Upload or simulate a document, record consent, and show the document in the patient timeline.
-6. Create a lab order/result and expose its status in the patient record.
+#### Revenue & Commerce (billing + product + clinical)
 
-#### Revenue and commerce
+- **Billing and payments** — invoices, paid/partial/outstanding states, payment capture, refund flow, order status progression (billing)
+- **Orders and cart** — add-to-cart, checkout, order progression (product + billing)
+- **Products and inventory** — 8 services across consultation, therapy, and skin-care categories; 10 products with stock levels, batches, reorder thresholds, low-stock warnings, batch/expiry visibility (product)
+- **Services and categories** — separate Add Service and Add Category actions, with View/Edit/Delete controls (product)
 
-- Billing and payments
-- Orders and cart
-- Products and inventory
-- Services and categories
+**Include sample data:**
+- Invoices, paid/partial/outstanding states
+- Payment capture, refund flow
+- Order status progression
+- Coupon validation (valid, expired, tenant-specific)
+- Stock adjustment, low-stock warnings
+- Batch/expiry visibility
+- Separate service/category/product management
 
-Include sample invoices, paid/partial/outstanding states, payment capture, refund flow, order status progression, coupon validation, stock adjustment, low-stock warnings, batch/expiry visibility, and separate service/category/product management. Mutations must be duplicate-safe and auditable.
+#### People & Control (across relevant services)
 
-#### People and control
+- **Doctors and schedules** — profiles, specialties, schedules, leave blocks, clinic assignment (clinical)
+- **Organizations and clinics** — org hierarchy, clinic assignment, RBAC (auth + clinical)
+- **Users and RBAC** — user status, role assignment, clinic-scoped permissions (auth + all)
+- **Notifications** — read/unread behavior, notification types across services
 
-- Doctors and schedules
-- Organizations and clinics
-- Users and RBAC
-- Notifications
+#### Growth & Content (cms)
 
-Provide doctor profiles, specialties, schedules, leave blocks, clinic assignment, user status, role assignment, clinic-scoped permissions, and notification read/unread behavior.
+- **CMS/public content** — draft, published, and archived states for pages, articles, and FAQs
+- **Tenant-branded public content** — using active tenant's logo/colors/name/metadata without leaking content across tenants
 
-#### Growth and content
+#### Insights & Governance (all services)
 
-- CMS/public content
+- **Reports and global search** — find patients, appointments, doctors, products, orders, and content within scope
+- **Audit and reliability** — actor, tenant, clinic, entity, action, timestamp, result; demonstrate that repeating the same mutation does not create a duplicate record (idempotency)
+- **API / Schema map** — documentation of all API endpoints across microservices
+- **Tenant and environment settings** — context switching, tenant isolation verification
 
-Support draft, published, and archived states for pages, articles, and FAQs. Show tenant-branded public content using the active tenant's logo/colors/name/metadata without leaking content across tenants.
+**Reports should include:**
+- Appointment volume (clinical)
+- Revenue collection (billing)
+- Outstanding amount (billing)
+- Doctor utilization (clinical)
+- Patient acquisition (cms)
+- Treatment completion (clinical)
+- Product sales (product)
+- Inventory risk (product)
 
-#### Insights and governance
+Search should find patients, appointments, doctors, products, orders, and content within scope.
 
-- Reports and global search
-- Audit and reliability
-- API/schema map
-- Tenant and environment settings
+Audit should show actor, tenant, clinic, entity, action, timestamp, and result.
 
-Reports should include appointment volume, revenue collection, outstanding amount, doctor utilization, patient acquisition, treatment completion, product sales, and inventory risk. Search should find patients, appointments, doctors, products, orders, and content within scope. Audit should show actor, tenant, clinic, entity, action, timestamp, and result. The reliability view should demonstrate that repeating the same mutation does not create a duplicate record.
+The reliability view should demonstrate that repeating the same mutation does not create a duplicate record.
 
-### 6. Sample data requirements
+### 4. Sample Data Requirements
 
-Create enough connected data for every page to look populated on first load. Use clearly fictional data based in India, with INR currency and dates that are easy to understand in a demo.
+Create enough connected data for every page to look populated on first load across all 9 microservices. Use clearly fictional data based in India, with INR currency and dates that are easy to understand in a demo.
 
-Include at minimum:
+**Include at minimum:**
 
-- 2 organizations and 3 clinics total
-- 10 patients with varied statuses, appointment history, treatment plans, and lifetime values
-- 3 doctors across EECP/therapy and dermatology/skin care
-- 12 appointments across today, upcoming, completed, cancelled, and no-show states
-- queue records with at least one waiting and one in-consultation patient
-- consultations, diagnoses, prescriptions, medical records, lab results, documents, and consents
-- 2 EECP/EECP+ courses with mixed completed, scheduled, and missed sessions
-- 3 skin assessments with recommendations and sample image references
-- 8 services across consultation, therapy, and skin-care categories
-- 10 products, categories, stock levels, batches, reorder thresholds, and at least one low-stock item
-- 5 orders, 8 invoices, payments, a partial payment, and a refund
-- 3 coupons with valid, expired, and tenant-specific examples
-- leads, follow-ups, reviews, notifications, CMS pages, articles, and FAQs
-- audit records and idempotency records for visible demo mutations
+- **2 organizations** and **3 clinics total** (across auth + clinical)
+- **10 patients** with varied statuses, appointment history, treatment plans, and lifetime values (clinical + queue + lab)
+- **3 doctors** across EECP/therapy and dermatology/skin care (clinical)
+- **12 appointments** across today, upcoming, completed, cancelled, and no-show states (clinical + queue)
+- **Queue records** with at least one waiting and one in-consultation patient (queue)
+- **Consultations**, **diagnoses**, **prescriptions**, **medical records**, **lab results**, **documents**, and **consents** (clinical + lab + cms)
+- **2 EECP/EECP+ courses** with mixed completed, scheduled, and missed sessions (clinical)
+- **3 skin assessments** with recommendations and sample image references (clinical + product)
+- **8 services** across consultation, therapy, and skin-care categories (product)
+- **10 products**, categories, stock levels, batches, reorder thresholds, and at least one low-stock item (product)
+- **5 orders**, **8 invoices**, payments, a partial payment, and a refund (billing)
+- **3 coupons** with valid, expired, and tenant-specific examples (billing + product)
+- **Leads**, **follow-ups**, **reviews**, **notifications** (clinical + cms)
+- **CMS pages**, **articles**, and **FAQs** (cms)
+- **Audit records** and **idempotency records** for visible demo mutations (all services)
 
-All records must carry or resolve to the correct organization and clinic context. Include a visible context-switching demonstration where the data changes and cross-tenant records cannot be opened.
+**All records must carry or resolve to the correct organization and clinic context.**
 
-### 7. Functional interaction requirements
+**Visible context-switching demonstration** where data changes and cross-tenant records cannot be opened across relevant microservices.
 
-Implement real client-side or API-backed behavior for:
+### 5. Functional Interaction Requirements
 
-- navigation, breadcrumbs, search, filters, sorting, pagination, and URL state
-- create, view, edit, archive/delete with confirmation where appropriate
-- appointment booking, queue advancement, consultation completion, and follow-up scheduling
-- prescription and order item selection from the catalog
-- invoice creation, payment capture, refund, coupon application, and stock adjustment
-- CMS draft/publish actions
-- notification read/unread actions
-- tenant and clinic switching
-- role switching/login and permission-aware actions
-- CSV export for at least patients, appointments, billing, and inventory
-- reset demo data to its original seed state
-- loading skeletons, empty states, validation errors, API errors, and permission-denied states
+Implement real client-side or API-backed behavior for navigation, breadcrumbs, search, filters, sorting, pagination, and URL state across microservices.
 
-Use optimistic UI only where rollback behavior is implemented. Show a toast or inline result for successful and failed actions. Destructive operations must be reversible where domain-appropriate or require confirmation.
+**Create, view, edit, archive/delete** with confirmation where appropriate across services.
 
-### 8. Security and data-isolation demonstration
+**Appointment booking**, queue advancement, consultation completion, and follow-up scheduling (clinical + queue).
+
+**Prescription and order item selection** from the catalog (product + clinical).
+
+**Invoice creation**, payment capture, refund, coupon application, and stock adjustment (billing + product).
+
+**CMS draft/publish actions** (cms).
+
+**Notification read/unread actions** across services.
+
+**Tenant and clinic switching** — data changes consistently; cross-scope access prevented across all services.
+
+**Role switching/login** and permission-aware actions across services.
+
+**CSV export** for at least: patients, appointments, billing, and inventory (across relevant services).
+
+**Reset demo data** to its original seed state across all services.
+
+**Loading skeletons, empty states, validation errors, API errors, and permission-denied states** across services.
+
+**Optimistic UI** only where rollback behavior is implemented. Show a toast or inline result for successful and failed actions. **Destructive operations** must be reversible where domain-appropriate or require confirmation across services.
+
+### 5. Security & Data-Isolation Demonstration (Microservice-Aware)
 
 The demo must visibly and technically reinforce these rules:
 
-- active organization is resolved from tenant context and membership
-- optional clinic context must belong to the active organization
-- patient users can only see their own records
-- clinic-scoped staff cannot see another clinic's restricted data
-- switching from `cliniccare-demo` to `cliniccare-demo-wellness` changes all tenant-owned lists
-- search, exports, dashboards, and detail routes use the same scope rules as normal lists
-- unauthorized actions show a clear permission-denied state
-- all state-changing demo operations add an audit entry and idempotency record
+- **Active organization** is resolved from tenant context and membership across services
+- **Optional clinic context** must belong to the active organization across services
+- **Patient users** can only see their own records across services
+- **Clinic-scoped staff** cannot see another clinic's restricted data across services
+- **Switching** from `cliniccare-demo` to `cliniccare-demo-wellness` changes all tenant-owned lists across relevant services
+- **Search, exports, dashboards, and detail routes** use the same scope rules as normal lists across services
+- **Unauthorized actions** show a clear permission-denied state across services
+- **All state-changing demo operations** add an audit entry and idempotency record across the relevant microservice
 
-Do not claim that front-end hiding alone provides security. Where a backend exists, enforce the same rules server-side.
+⚠️ **Do not claim that front-end hiding alone provides security.** Where a backend exists (all 9 microservices), enforce the same rules server-side.
 
-### 9. Definition of done
+### 5. Definition of Done (Microservice-Comprehensive)
 
 The demo is complete only when:
 
-- a new viewer can open the app and understand the clinic's current operational state within 30 seconds
-- every required module is reachable and has populated sample data
-- the main workflows can be completed without editing source code
-- create/view/edit/delete or equivalent lifecycle actions work for operational modules
-- all role views show appropriate navigation and permissions
-- tenant and clinic switching changes data consistently and prevents cross-scope access
-- the website works at desktop and mobile widths and supports light/dark mode
-- no primary control is a dead button or points to an unfinished route
-- refresh/deep-link navigation preserves the current route and safe context
-- the app has no console errors in the main demo flows
-- the README includes local run instructions, demo accounts or a safe login path, seed/reset instructions, and the demo URL
-- add focused tests for tenant isolation, role visibility, appointment progression, billing mutation idempotency, and patient self-scope
+- ✅ A new viewer can open the app and understand the clinic's current operational state within 30 seconds across relevant services
+- ✅ Every required module is reachable and has populated sample data across services
+- ✅ The main workflows can be completed without editing source code across services
+- ✅ **Create/view/edit/delete or equivalent lifecycle actions** work for operational modules across services
+- ✅ **All role views** show appropriate navigation and permissions across services
+- ✅ **Tenant and clinic switching** changes data consistently and prevents cross-scope access across services
+- ✅ The website works at desktop and mobile widths and supports light/dark mode across services
+- ✅ **No primary control is a dead button** or points to an unfinished route across services
+- ✅ **Refresh/deep-link navigation** preserves the current route and safe context across services
+- ✅ The app has **no console errors** in the main demo flows across services
+- ✅ The README includes local run instructions, demo accounts or a safe login path, seed/reset instructions, and the demo URL
+- ✅ **Focused tests** for tenant isolation, role visibility, appointment progression, billing mutation idempotency, and patient self-scope across services
+- ✅ **Tests run across all relevant microservices** (not just one)
 
-### 10. Delivery format
+### 6. Delivery Format
 
 Deliver:
 
-1. the implemented demo website in the existing application structure
-2. an idempotent sample-data seed or mock adapter
-3. concise setup and run instructions
-4. a route/module inventory
-5. a short list of implemented demo workflows
-6. focused automated tests and the commands used to run them
-7. a note identifying simulated integrations and any intentionally deferred production features
+1. **The implemented demo website** in the existing application structure (all 9 microservices)
+2. **An idempotent sample-data seed or mock adapter** that works across services
+3. **Concise setup and run instructions** (updated for microservice architecture)
+4. **A route/module inventory** listing all reachable routes per microservice
+5. **A short list of implemented demo workflows** across services
+6. **Focused automated tests** and the commands used to run them (vitest/jest across services)
+7. **A note identifying simulated integrations** and any intentionally deferred production features across services
 
-Before presenting the result, run the available typecheck, lint, test, and production build commands, and fix errors introduced by the implementation.
+**Before presenting the result**, run the available typecheck, lint, test, and production build commands across all services, and fix errors introduced by the implementation.
+
+### 7. Simulated Integrations (Clearly Labeled)
+
+The following integrations are **simulated** for demo purposes only and do not represent production behavior:
+
+- **Payment processing** — simulated states, no real gateway integration
+- **SMS/WhatsApp notifications** — simulated states only
+- **External healthcare APIs** — mocked responses only
+- **Third-party authentication** — demo accounts only
+- **Email services** — simulated email content only
+
+These are clearly labeled in the UI as "demo mode" behavior.
+
+### 8. Technical Notes
+
+- The frontend (Next.js) communicates with the API gateway (`/api/` prefix) which routes to the appropriate microservice
+- Each microservice has its own Prisma schema and database isolation via `organizationId`
+- API gateway routes requests based on `X-Tenant-Slug` header
+- Demo data is seeded using tenant slugs, not hard-coded IDs
+- All state-changing operations include audit entries and idempotency keys
+- The frontend API client includes tenant context in all requests
+- Role-based UI visibility is enforced both client-side (UX) and server-side (API guards)
+
+### 8. Before Presenting
+
+Run these commands across all relevant microservices and fix any errors:
+
+```powershell
+npm run typecheck:api   # API + auth typecheck
+npm run typecheck:web   # Web typecheck
+npm run lint            # Lint all TypeScript
+npm run build:api       # Build API
+npm run build:web      # Build web
+npm run test            # Run unit/tests (if configured)
+# Then fix any errors before presenting
+```
