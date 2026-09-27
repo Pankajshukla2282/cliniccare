@@ -40,7 +40,13 @@ export function DemoLoginPanel() {
     setStatus(`${account.label} account selected`);
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
+  function getTenantSlugFromEmail(email: string): string {
+  if (email.includes('+cliniccare-demo-wellness')) return 'cliniccare-demo-wellness';
+  if (email.includes('+cliniccare-demo')) return 'cliniccare-demo';
+  return webConfig.defaultTenantSlug;
+}
+
+async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setStatus('Signing in...');
@@ -54,6 +60,8 @@ export function DemoLoginPanel() {
       if (!response.ok) throw new Error(payload.message ?? 'Login failed');
       localStorage.setItem('cliniccare.accessToken', payload.accessToken);
       localStorage.setItem('cliniccare.session', JSON.stringify({ user: payload.user, permissions: payload.permissions ?? [] }));
+      const tenantSlug = getTenantSlugFromEmail(email);
+      localStorage.setItem('cliniccare.tenantSlug', tenantSlug);
       setStatus(`Signed in as ${payload.user.role}. Opening workspace...`);
       router.push('/dashboard');
     } catch (error) {

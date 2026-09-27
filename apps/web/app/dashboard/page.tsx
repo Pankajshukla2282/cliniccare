@@ -38,11 +38,18 @@ function rowLabel(row: Record<string, unknown>, index: number): string {
   return String(row.name ?? row.title ?? patientUser?.firstName ?? row.email ?? `Record ${index + 1}`);
 }
 
+function getTenantName(slug: string): string {
+  return slug === 'cliniccare-demo' ? 'ClinicCare Demo' : 'Aarogyam Skin & Wellness';
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [token, setToken] = useState('');
   const [user, setUser] = useState<User | null>(null);
-  const [tenantSlug, setTenantSlug] = useState('cliniccare-demo');
+  const [tenantSlug, setTenantSlug] = useState(() => {
+    const saved = localStorage.getItem('cliniccare.tenantSlug');
+    return saved || 'cliniccare-demo';
+  });
   const [activeModule, setActiveModule] = useState<ModuleKey>('overview');
   const [data, setData] = useState<Record<string, unknown>>({});
   const [available, setAvailable] = useState<Record<string, boolean>>({});
@@ -120,6 +127,7 @@ export default function DashboardPage() {
   function logout() {
     localStorage.removeItem('cliniccare.accessToken');
     localStorage.removeItem('cliniccare.session');
+    localStorage.removeItem('cliniccare.tenantSlug');
     router.replace('/');
   }
 
@@ -154,7 +162,7 @@ export default function DashboardPage() {
 
         <section>
           <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-            <div><p className="text-sm text-slate-500">Tenant workspace</p><h1 className="text-3xl font-bold tracking-tight text-slate-950">{tenantSlug === 'cliniccare-demo' ? 'ClinicCare Demo' : 'Aarogyam Skin & Wellness'}</h1></div>
+            <div><p className="text-sm text-slate-500">Tenant workspace</p><h1 className="text-3xl font-bold tracking-tight text-slate-950">{getTenantName(tenantSlug)}</h1></div>
             <div className="text-sm text-slate-500">{user?.email}</div>
           </header>
           {loading && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-slate-600">Loading workspace data...</div>}

@@ -1,0 +1,28 @@
+
+> cliniccare@0.1.0 db:seed
+> tsx prisma/seed.ts
+
+{
+  "environment": "development",
+  "tenant": {
+    "id": 1,
+    "slug": "cliniccare-demo",
+    "clinicId": 1
+  },
+  "secondTenant": {
+    "id": 18,
+    "slug": "cliniccare-demo-wellness",
+    "clinicId": 4
+  },
+  "platform": {
+    "id": 2,
+    "superAdmin": "superadmin@cliniccare.local"
+  },
+  "demoPasswords": {
+    "admin": "SEED_ADMIN_PASSWORD or ChangeMe123!",
+    "doctor": "SEED_DOCTOR_PASSWORD or Doctor123!",
+    "reception": "SEED_RECEPTION_PASSWORD or Reception123!",
+    "patient": "SEED_PATIENT_PASSWORD or Patient123!",
+    "staff": "SEED_STAFF_PASSWORD or Staff123!"
+  }
+}
